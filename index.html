@@ -1,922 +1,699 @@
-import { useState } from "react";
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ImmoGuide — Arrondissement de Lille</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{font-family:'DM Sans',sans-serif;color:#111827;background:#F7F6F3;display:flex;flex-direction:column}
 
-/* ─── GLOBAL STYLES ─────────────────────────────────────────── */
-const G = {
-  bg: "#0C0F1A",
-  surface: "#141824",
-  card: "#1C2235",
-  border: "rgba(255,255,255,0.07)",
-  gold: "#D4A853",
-  copper: "#C17A5B",
-  sage: "#7FA882",
-  teal: "#3D8A7A",
-  plum: "#7B5EA7",
-  text: "#F0EDE8",
-  muted: "#8A9BB5",
-  dim: "#4A5568",
-  red: "#E05A5A",
-};
-
-const css = `
-  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=DM+Sans:wght@300;400;500;600&display=swap');
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: ${G.bg}; }
-  ::-webkit-scrollbar { width: 0; height: 0; }
-  @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(16px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  @keyframes shimmer {
-    0%,100% { opacity: 0.6; } 50% { opacity: 1; }
-  }
-  .fade-up { animation: fadeUp 0.4s ease forwards; }
-  .card-hover { transition: transform 0.2s, box-shadow 0.2s; }
-  .card-hover:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
-`;
-
-/* ─── DATA ───────────────────────────────────────────────────── */
-const ROUTE = [
-  { code: "CDG", label: "Paris", date: "29 juil 16h25", type: "flight", color: G.copper },
-  { code: "DOH", label: "Doha", date: "29 juil 23h45", type: "transit", color: G.dim },
-  { code: "BKK", label: "Bangkok", date: "30 juil 12h55", type: "city", color: G.gold },
-  { code: "🚆", label: "Train nuit", date: "30 juil ~18h", type: "transport", color: G.teal },
-  { code: "CNX", label: "Chiang Mai", date: "31 juil 07h30", type: "city", color: G.teal },
-  { code: "🚆", label: "Train nuit", date: "3 août ~18h", type: "transport", color: G.teal },
-  { code: "BKK", label: "Bangkok", date: "4 août 07h30", type: "city", color: G.gold },
-  { code: "✈️", label: "Vol inter.", date: "4 août après-midi", type: "transport", color: G.copper },
-  { code: "KL", label: "Kao Lak", date: "4 août", type: "city", color: G.sage },
-  { code: "KS", label: "Khao Sok", date: "7 août", type: "city", color: G.sage },
-  { code: "KPG", label: "Ko Phangan", date: "9 août", type: "city", color: G.plum },
-  { code: "KT", label: "Koh Tao", date: "13 août", type: "city", color: "#5B9BD5" },
-  { code: "BKK", label: "Bangkok", date: "17 août", type: "city", color: G.gold },
-  { code: "CDG", label: "Paris", date: "19 août 15h20", type: "flight", color: G.copper },
-];
-
-const DESTINATIONS = [
-  {
-    id: "bkk1", emoji: "🏙️", name: "Bangkok", tag: "Arrivée", color: G.gold,
-    nights: "1N", dates: "29–30 juil", periode: "Arrivée + train de nuit",
-    meteo: "🌦️ 32°C · Humide · Averses ponctuelles",
-    intro: "1 nuit pour récupérer du vol, manger dans Chinatown et prendre le train de nuit vers le nord. Bangkok se vivra mieux au retour — ici, c'est l'élan du départ.",
-    urgence: { icon: "🚆", text: "Train de nuit le 30 juillet ~18h depuis gare Krung Thep Aphiwat (Bang Sue). Réserver en avance sur thairailwayticket.com — wagon-lit 2e classe." },
-    quartiers: [
-      { nom: "Silom / Sathorn", vibe: "Business · BTS · Rooftops", tip: "Meilleur quartier pour une seule nuit. Bien desservi, taxis partout, 30 min de la gare ferroviaire.", icon: "🌃" },
-      { nom: "Phra Nakhon / Rattanakosin", vibe: "Temples · Histoire · Backpackers", tip: "Si tu arrives avec de l'énergie pour le Grand Palace l'après-midi, dormir ici t'évite un trajet.", icon: "🛕" },
-    ],
-    food: [
-      { nom: "Chinatown – Yaowarat", detail: "Le premier soir. Roast duck, seafood sur trottoir, calmars grillés. Y aller à 20h quand les stands ouvrent vraiment.", must: true },
-      { nom: "Jay Fai", detail: "La street food étoilée Michelin. Crabe omelette légendaire. File d'attente 2h — y aller à l'ouverture ou réserver.", must: true },
-      { nom: "Or Tor Kor Market", detail: "Le marché le plus propre de Bangkok. Fruits exotiques, curry, traiteurs thaïs haut de gamme. Le matin.", must: false },
-    ],
-    activites: [
-      { icon: "🛕", nom: "Grand Palace + Wat Pho", detail: "Si tu n'es pas HS du vol. Arriver à 8h pour éviter la foule. Prévoir 3h." },
-      { icon: "🌇", nom: "Sunset depuis un rooftop", detail: "Vertigo (Banyan Tree), Octave Rooftop ou Sky Bar (State Tower). Au moins une fois." },
-      { icon: "🚆", nom: "Préparer les billets train", detail: "Matin du 30 : aller à la gare ou acheter en ligne. Train n°9 ou n°13. Wagon-lit 2e classe = couchette avec rideau, clim, linge propre." },
-      { icon: "⛵", nom: "Khlong Saen Saep", detail: "Le canal express pour se déplacer comme un local. Bateau longue queue dans le trafic d'eau." },
-    ],
-    shopping: [
-      { nom: "Tailleurs Bangkok – MBK / Silom", detail: "2–3 essayages nécessaires. Donner au moins 48h. Apporter des photos de références. Budget costume sur-mesure : 150–250€.", icon: "🧵" },
-      { nom: "Chatuchak Weekend Market", detail: "Sam/dim uniquement. Artisanat, vintage, plantes, fringues. Y aller à 8h avant la chaleur.", icon: "🛍️" },
-      { nom: "Terminal 21", detail: "Centre commercial par étages-pays. Chaque étage = une ville du monde. Fringues thaïes à petits prix.", icon: "🏬" },
-    ],
-    transport_out: {
-      de: "Gare Krung Thep Aphiwat (Bang Sue)",
-      vers: "Chiang Mai",
-      moyen: "🚆 Train de nuit SRT · Train n°9 ou n°13",
-      duree: "12–13h · Départ ~18h · Arrivée ~07h30",
-      prix: "15–25€ wagon-lit 2e classe",
-      conseil: "Réserver sur thairailwayticket.com dès maintenant. Wagon-lit 2e classe : couchette + rideau + clim + linge. L'expérience la plus iconique du voyage.",
-    },
-    heberg: [
-      { type: "Boutique hôtel Silom", budget: "40–80€/nuit", tip: "Mode Hôtel, Silom Serene. Bien placé pour la gare." },
-      { type: "Guesthouse Rattanakosin", budget: "20–40€/nuit", tip: "Près des temples pour arriver à pied." },
-    ],
-  },
-  {
-    id: "chiangmai", emoji: "🏔️", name: "Chiang Mai", tag: "Nord", color: G.teal,
-    nights: "3N", dates: "31 juil – 3 août", periode: "Train de nuit aller-retour",
-    meteo: "🌿 28°C · Averses courtes le soir · Verdure maximale · Plus doux qu'à Bangkok",
-    intro: "La capitale culturelle du nord. Entourée de montagnes, parsemée de temples dorés, envahie de cafés de spécialité et de marchés nocturnes. C'est le contrepoint parfait au chaos de Bangkok — et la ville la plus photographiable du voyage.",
-    urgence: { icon: "🚆", text: "Retour train nuit le 3 août ~18h depuis la gare de Chiang Mai → Bangkok arrivée 4 août ~07h30. Acheter les deux billets (aller + retour) en même temps." },
-    quartiers: [
-      { nom: "Vieille Ville (Old City)", vibe: "Temples · Guesthouses · Nuit animée", tip: "Entourée de douves carrées. À pied partout. Le quartier idéal pour se poser 3 nuits. Temples à chaque angle, marchés nocturnes, cafés branchés. Le cœur de tout.", icon: "🏯" },
-      { nom: "Nimman (Nimmanhaemin)", vibe: "Hipster · Cafés de spécialité · Concept stores", tip: "Le Ari de Chiang Mai. Café culture intense, boutiques créatives, restaurants fusion. Pour les soirées 2 et 3.", icon: "☕" },
-      { nom: "Th Charoen Prathet", vibe: "Bord de rivière Ping · Galeries d'art", tip: "Moins touristique, plus local. Le Walking Street du samedi sur Wualai Road part de là — incontournable.", icon: "🎨" },
-    ],
-    food: [
-      { nom: "Khao Soi", detail: "Le plat emblématique du nord. Curry rouge au lait de coco avec nouilles croustillantes. Khao Soi Islam ou Khao Soi Gai ou Khao Soi Khun Yai.", must: true },
-      { nom: "Marché nocturne de l'Old City", detail: "Chaque soir dans la vieille ville. Street food locale, saucisses du nord (sai ua), larb, curry vert.", must: true },
-      { nom: "Sunday Walking Street Wualai", detail: "Le dimanche uniquement. Artisanat local, nourriture thaïe traditionnelle, ambiance unique. Si tu es là un dimanche : priorité absolue.", must: false },
-      { nom: "Cafés de spécialité Nimman", detail: "Ristr8to, Graph Café, Ponganes Espresso. Chiang Mai = capitale thaïe du café de spécialité. Matinée entière à explorer.", must: false },
-    ],
-    activites: [
-      { icon: "🐘", nom: "Sanctuaire éthique éléphants", detail: "Elephant Nature Park (le meilleur, réserver 2–3 semaines avant) ou Elephant Sanctuary. Pas de dressage, pas de cirque. Bain dans la rivière, nourrir, observer. L'une des meilleures expériences du voyage. Demi-journée ou journée entière." },
-      { icon: "🛕", nom: "Doi Suthep à l'aube", detail: "Temple bouddhiste sur la montagne, 15km du centre. Songthaew rouge depuis l'Old City (~100 THB). Y aller à 7h avant les cars de touristes. Vue panoramique sur toute la ville dans la brume matinale." },
-      { icon: "🍳", nom: "Cours de cuisine thaïe", detail: "Chiang Mai = meilleure ville pour ça. Thai Farm Cooking School (marché le matin + ferme + cuisine), Zabb-E-Lee. Contenu parfait pour @be_beckss. Réserver à l'avance." },
-      { icon: "🌿", nom: "Trek 1 jour montagne", detail: "Villages Hmong ou Karen en périphérie. Cascades, forêt, points de vue. Passer par une agence locale sérieuse (pas les tours hôtels). Demander un guide qui parle vraiment la langue du village." },
-      { icon: "☕", nom: "Café crawl Nimman", detail: "Une matinée entière à pied entre Ristr8to, Graph Café, Ponganes. Cafés de spécialité torréfactés sur place. Le meilleur café du voyage." },
-      { icon: "🎨", nom: "Saturday/Sunday Walking Street", detail: "Sam : Wualai Road. Dim : Th Wichayanon. Artisanat local authentique, bijoux, textiles, food. Ambiance incomparable. Si tu es là un week-end, c'est prioritaire." },
-      { icon: "🌺", nom: "Doi Inthanon National Park", detail: "Le toit de la Thaïlande (2565m). Cascades, brume, jardins royaux. Excursion journée. Un peu frisquet au sommet — prendre une couche." },
-    ],
-    shopping: [
-      { nom: "Night Bazaar", detail: "Tous les soirs. Artisanat thaï et chiang mai, soieries, lanternes. Négocier sans hésiter (–30% possible).", icon: "🏮" },
-      { nom: "Soieries & textiles", detail: "La spécialité du nord. Tissu Hmong, batik, écharpes en soie. Boutiques autour de l'Old City.", icon: "🧶" },
-      { nom: "Lanna Craft Market", detail: "Artisanat authentique Karen et Hmong. Pas de reproductions chinoises. Demander 'local made'.", icon: "🪴" },
-    ],
-    transport_out: {
-      de: "Gare ferroviaire Chiang Mai",
-      vers: "Bangkok (Krung Thep Aphiwat)",
-      moyen: "🚆 Train de nuit SRT retour",
-      duree: "12–13h · Départ ~18h · Arrivée Bangkok ~07h30",
-      prix: "15–25€ wagon-lit 2e classe",
-      conseil: "Arrivée Bangkok matin du 4 août. Consigne gare ou hôtel pour les bagages. Vol intérieur Don Mueang → Phuket l'après-midi (Air Asia / Thai Lion Air, 30–60€, 1h20). Taxi Don Mueang depuis centre : 30–45 min.",
-    },
-    heberg: [
-      { type: "Boutique hôtel Old City", budget: "30–70€/nuit", tip: "Rachamankha, Tamarind Village, 3 Sis. Dans les douves, style lanna traditionnel." },
-      { type: "Guesthouse Nimman", budget: "20–45€/nuit", tip: "Artel House, Hug Nimman. Hipster, bien placé pour les cafés." },
-      { type: "Glamping jungle périphérie", budget: "60–100€/nuit", tip: "Option insolite : tente de luxe dans la forêt à 15 min de la ville." },
-    ],
-  },
-  {
-    id: "kaolak", emoji: "🌊", name: "Kao Lak", tag: "Andaman", color: G.sage,
-    nights: "3N", dates: "4–7 août", periode: "Côte Andaman",
-    meteo: "🌧️ 30°C · Saison pluies côté Andaman · Averses matin/soir · Soleil le reste · Plages quasi-désertes",
-    intro: "Kao Lak en août, c'est la Thaïlande sans les touristes. Les îles Similan sont fermées (protection marine mai-octobre) — mais c'est justement ce qui la rend magique : plages immenses pour toi seule, mangroves à kayak, et la base parfaite pour rejoindre Khao Sok.",
-    urgence: { icon: "⚠️", text: "Îles Similan FERMÉES mai-octobre. Les Surin Islands sont accessibles en août. Khao Sok est à 1h30 en minibus : prévoir 1 nuit là-bas depuis Kao Lak." },
-    quartiers: [
-      { nom: "Nang Thong Beach", vibe: "Centre · Restaurants · Animation", tip: "La zone principale. Marché nocturne plusieurs soirs. Meilleur compromis services/ambiance.", icon: "🏖️" },
-      { nom: "Khuk Khak Beach", vibe: "Calme · Nord de Kao Lak", tip: "Plage quasi-déserte. Pour les matins solo et les couchers de soleil à deux.", icon: "🌅" },
-      { nom: "Bang Sak Beach", vibe: "Sauvage · Isolé · Nature pure", tip: "Coup de cœur garanti. Aucun touriste. Bungalows simples face à la mer. Le bout du monde.", icon: "🌿" },
-    ],
-    food: [
-      { nom: "Marchés nocturnes Nang Thong", detail: "Street food locale fraîche. Poisson grillé, pad thaï, mangue sticky rice. Moins de 3€ le repas.", must: true },
-      { nom: "Restaurants de bord de mer", detail: "Seafood frais pêché le matin. Les restos face à la plage à Nang Thong servent du crabe et des crevettes à prix locaux.", must: false },
-    ],
-    activites: [
-      { icon: "🚣", nom: "Kayak en mangrove", detail: "Tour organisé le matin (~3h). Incontournable dans la région. Oiseaux rares, crabes, forêt aquatique labyrinthique. Partir à 7h avant la chaleur. ~25–35€/pers." },
-      { icon: "🤿", nom: "Surin Islands (si météo ok)", detail: "Accessibles en août contrairement aux Similan. Snorkeling sur coraux intacts, requins-baleines possibles de nov à avril mais tortues toute l'année. Excursion journée ~60–80€." },
-      { icon: "🌊", nom: "Tsunami Memorial", detail: "2004. Un bateau de la marine royale thaïlandaise porté à 2km à l'intérieur des terres par la vague. Site sobre, poignant, indispensable pour comprendre la région." },
-      { icon: "🏖️", nom: "Plages désertes & farniente", detail: "Kao Lak en août = presque vide. Profite. La plage pour toi, le silence, les cocotiers. C'est aussi ça le voyage." },
-      { icon: "🌿", nom: "Parc national Khao Lak-Lam Ru", detail: "Randonnée dans la forêt primaire. Observation wildlife (singes, oiseaux tropicaux). Pas besoin de guide pour les sentiers balisés." },
-    ],
-    shopping: [
-      { nom: "Artisanat local Night Market", detail: "Petite échelle mais authentique. Tissus thaïs, épices, souvenirs locaux sans surpayer.", icon: "🏮" },
-    ],
-    transport_out: {
-      de: "Kao Lak",
-      vers: "Khao Sok National Park",
-      moyen: "🚐 Minibus privé ou songhaew",
-      duree: "1h30 – 2h",
-      prix: "15–25€ en minibus partagé",
-      conseil: "Réserver via l'hébergement la veille. Jonction naturelle entre côte Andaman et Golfe de Thaïlande. Khao Sok vaut absolument 1–2 nuits.",
-    },
-    heberg: [
-      { type: "Bungalow bord de mer", budget: "30–60€/nuit", tip: "Khaolak Baan Kosta, Khaolak Merlin. Face à la mer, jardin tropical." },
-      { type: "Eco-resort", budget: "60–120€/nuit", tip: "La Flora Resort. Piscine, spa, bungalows dans les arbres. L'option insolite." },
-      { type: "Guesthouse simple Bang Sak", budget: "15–30€/nuit", tip: "Pour l'authenticité maximale. Très local, très calme." },
-    ],
-  },
-  {
-    id: "khaosok", emoji: "🌿", name: "Khao Sok", tag: "Jungle", color: "#5A9E72",
-    nights: "2N", dates: "7–9 août", periode: "Jungle primaire & lac flottant",
-    meteo: "🌦️ 30°C · Brumes matinales sur le lac · Averses tropicales · Verdure à couper le souffle",
-    intro: "La forêt primaire de Khao Sok est l'une des plus anciennes d'Asie du Sud-Est — 160 millions d'années. Le lac Cheow Lan et ses bungalows flottants sont la photo du voyage. Une nuit sur le lac, une nuit au village : la combinaison parfaite.",
-    urgence: null,
-    quartiers: [
-      { nom: "Village de Khao Sok", vibe: "Entrée du parc · Guesthouses · Jungle", tip: "Base pour les treks. Petite rue principale avec restos et loueurs de canots. Ambiance simple et authentique. 1 nuit ici + 1 nuit sur le lac.", icon: "🌲" },
-      { nom: "Lac Cheow Lan – Bungalows flottants", vibe: "Sur l'eau · Silence absolu · Magie", tip: "L'expérience la plus unique du voyage. 1 nuit obligatoire. Réserver MAINTENANT — sold out en été. Anurak, Elephant Hills, ou Cheow Lan Lake House.", icon: "🛖" },
-    ],
-    food: [
-      { nom: "Resto du village", detail: "Cuisine thaïe simple et fraîche. Curry vert, riz frit, soupe. 3–5€ le repas. Le soir, tous les voyageurs se retrouvent au même endroit.", must: false },
-      { nom: "Repas sur le lac inclus", detail: "Les bungalows flottants incluent généralement les repas. Poisson du lac, riz, légumes sautés. Manger face aux falaises karstiques.", must: true },
-    ],
-    activites: [
-      { icon: "🛖", nom: "Floating bungalow lac Cheow Lan", detail: "Dormir sur le lac. Se réveiller dans le brouillard à 6h, les falaises calcaires qui émergent. Nager dans l'eau turquoise avant le petit-déj. La photo. Anurak Community Lodge ou Elephant Hills pour le luxe, Cheow Lan Lake House pour l'authentique." },
-      { icon: "🦜", nom: "Night safari en jungle", detail: "Guide + lampe frontale après le dîner. Chercher les serpents arboricoles, les civettes, les singes nocturnes, les grenouilles phosphorescentes. 2–3h. Frissons garantis." },
-      { icon: "🚣", nom: "Canoë rivière Sok", detail: "La rivière traverse la forêt primaire. Pagayer en silence, observer les oiseaux, les lézards monitor sur les berges. Location ~5€/h. Y aller tôt le matin." },
-      { icon: "🐒", nom: "Trek gibbons à l'aube (5h30)", detail: "Se lever à 5h30 avec le guide. Les gibbons chantent à l'aube — un son qui porte à 1km. Les apercevoir dans la canopée est un privilège. Ne pas louper ça." },
-      { icon: "🪷", nom: "Rafflesia (si saison)", detail: "La plus grande fleur du monde pousse dans ce parc. Floraison aléatoire. Demander au guide s'il y en a une accessible." },
-    ],
-    shopping: [],
-    transport_out: {
-      de: "Khao Sok / Surat Thani",
-      vers: "Koh Phangan",
-      moyen: "🚐 + ⛴️ Minibus + Ferry (Lompraya ou Seatran)",
-      duree: "3–4h total",
-      prix: "15–20€ billet combiné tout-en-un",
-      conseil: "Ticket combiné depuis la guesthouse. Le minibus te récupère, te dépose au ferry Don Sak. Arrivée Koh Phangan ~13h. Très bien organisé.",
-    },
-    heberg: [
-      { type: "Floating bungalow – lac Cheow Lan", budget: "60–150€/nuit", tip: "Anurak Community Lodge (éco-luxe), Elephant Hills (glamping), Cheow Lan Lake House (authentique). Réserver 2 mois avant." },
-      { type: "Guesthouse village Khao Sok", budget: "15–35€/nuit", tip: "Morning Mist Resort, Our Jungle House. Bungalows dans les arbres au bord de la rivière." },
-    ],
-  },
-  {
-    id: "phangan", emoji: "🌙", name: "Koh Phangan", tag: "Golfe", color: G.plum,
-    nights: "4N", dates: "9–13 août", periode: "Full Moon · Plages cachées · Yoga",
-    meteo: "🌤️ 31°C · Côté Golfe = plus clément · Quelques averses · Beaucoup de soleil",
-    intro: "Koh Phangan c'est deux îles en une : la fête totale à Haad Rin la nuit de la Full Moon, et l'une des plus belles îles authentiques de Thaïlande le reste du temps. Depuis Srithanu, tu n'entendras même pas la fête si tu n'y vas pas.",
-    urgence: { icon: "🌕", text: "FULL MOON PARTY : ~12 août 2026 (date exacte à confirmer). Si tu veux y aller : dors à Srithanu, taxi vers Haad Rin le soir, rentre après. Si non : reste au nord, tu n'en sauras rien." },
-    quartiers: [
-      { nom: "Srithanu (côté ouest)", vibe: "Village yogi · Couchers de soleil · Expats · Bars cool", tip: "Le meilleur quartier de l'île pour une vibe locale et authentique. Bars sympas en bois sur pilotis, yoga studios, plage face au soleil couchant. Tout le contraire de la Full Moon.", icon: "🧘" },
-      { nom: "Chaloklum (nord)", vibe: "Village de pêcheurs · 100% local", tip: "Aucun touriste. Bateaux de pêche le matin, marché local à 7h. Déjeuner à côté des pêcheurs. Le vrai Koh Phangan.", icon: "⚓" },
-      { nom: "Haad Kuat / Bottle Beach", vibe: "Accessible en longtail uniquement · Paradisiaque", tip: "Longtail depuis Chaloklum (~200 THB, 15 min). Plage sans route, sans scooter, sans bruit. La mer, du sable blanc, des palmiers. Y passer la journée entière.", icon: "🏝️" },
-      { nom: "Haad Rin (sud-est)", vibe: "Full Moon Party zone · Bars · Touristes", tip: "Ne pas dormir ici. Y aller uniquement le soir de la Full Moon si tu veux, en taxi depuis Srithanu. Rentrer après.", icon: "🌕" },
-      { nom: "Thong Sala (port)", vibe: "Arrivée des ferries · Marché · Pratique", tip: "Zone de transit. Le marché nocturne Walking Street est là — bon pour un soir.", icon: "⛴️" },
-    ],
-    food: [
-      { nom: "Walking Street Thong Sala", detail: "Marché nocturne du vendredi. Street food au top : satay, curry, jus de fruits frais, desserts thaïs.", must: true },
-      { nom: "Srithanu restaurants", detail: "Bons petits restos locaux sur pilotis. Poisson frais, shakes, petits-dej healthy. Ambiance chill.", must: false },
-      { nom: "Sushi (oui vraiment)", detail: "Koh Phangan a une scène japonaise étonnante. Pour changer des currys.", must: false },
-    ],
-    activites: [
-      { icon: "🏝️", nom: "Ang Thong Marine Park (day trip)", detail: "L'excursion qui vaut le détour. Archipel de 42 îles karstiques. Kayak dans les grottes, snorkeling, lac emeraude intérieur (le fameux Ko Mae Ko). Le plus beau day trip du voyage. Excursion organisée ~50–70€ depuis Ko Phangan." },
-      { icon: "🧘", nom: "Yoga & wellness Srithanu", detail: "Abundant Space, Orion Healing, The Yoga Retreat. Cours dès 7h face à la mer. Yin, Vinyasa, Sound Healing. 8–15€ la session. Au moins deux matinées." },
-      { icon: "🛶", nom: "Bottle Beach en longtail", detail: "Depuis Chaloklum, 15 min sur l'eau. La plage la plus belle de l'île. Pas de route. Apporter de l'eau et de la lecture. Revenir avant 17h (dernier longtail)." },
-      { icon: "🏍️", nom: "Tour de l'île en scooter", detail: "Louer un scooter 1 journée (~200 THB/5€). Route de Srithanu → Chaloklum → Haad Kuat viewpoint → cascade Phaeng → viewpoint panoramique Wang Sai → plages est → retour. Liberté totale. Attention aux routes en pente mouillées." },
-      { icon: "🌕", nom: "Full Moon Party (optionnel)", detail: "La plus grande fête de plage au monde. 20 000–30 000 personnes à Haad Rin. Musique électronique, fire shows, alcool en seaux. Fun si tu aimes, enfer si non. Y aller avec de l'argent cash, pas de sac de valeur, chaussures fermées (éclats de verre sur la plage)." },
-      { icon: "🤿", nom: "Snorkeling Haad Yuan / Mae Haad", detail: "Banc de sable qui relie 2 îles à pied à marée basse à Mae Haad. Snorkeling direct depuis la plage à Haad Yuan. Tortues fréquentes." },
-    ],
-    shopping: [
-      { nom: "Walking Street Thong Sala", detail: "Vêtements bohème, bijoux, attrape-rêves, huiles essentielles. Prix corrects.", icon: "🛍️" },
-      { nom: "Boutiques Srithanu", detail: "Tenues de yoga, maillots, robes légères. Vibe boho. Les meilleures fringues de voyage.", icon: "👗" },
-    ],
-    transport_out: {
-      de: "Koh Phangan – Thong Sala",
-      vers: "Koh Tao",
-      moyen: "⛴️ Ferry Lompraya express",
-      duree: "1h",
-      prix: "10–15€",
-      conseil: "Plusieurs départs par jour. Réserver la veille à l'hébergement ou en ligne. Le Lompraya est le plus rapide et le plus confortable. Lomprayah High Speed Ferry.",
-    },
-    heberg: [
-      { type: "Villa avec piscine Srithanu", budget: "80–150€/nuit (à 2)", tip: "Nombreuses villas privées avec piscine. Airbnb ou booking direct. Le meilleur rapport qualité/expérience." },
-      { type: "Bungalow plage Haad Yuan", budget: "40–80€/nuit", tip: "Accessible uniquement en bateau. L'option la plus insolite — vivre sur une plage sans route." },
-      { type: "Boutique hôtel Srithanu", budget: "50–100€/nuit", tip: "Haad Yao Bay Resort, Rocky Mountain Hotel. Vue sur mer, calme." },
-    ],
-  },
-  {
-    id: "kohtao", emoji: "🤿", name: "Koh Tao", tag: "Plongée", color: "#5B9BD5",
-    nights: "4N", dates: "13–17 août", periode: "Capitale mondiale de la plongée",
-    meteo: "🌤️ 30°C · Côté Golfe · Bon temps en août · Eaux claires · Idéal pour plonger",
-    intro: "La plus petite des trois îles du Golfe et la plus intense sous l'eau. Koh Tao forme plus de plongeurs PADI que n'importe quelle autre île au monde. Mais c'est aussi une île à couchers de soleil spectaculaires, à bars décontractés et à plages quasi-secrètes.",
-    urgence: null,
-    quartiers: [
-      { nom: "Sairee Beach", vibe: "Principale · Dive shops · Animée", tip: "La vie centrale. Longue plage de sable blanc, bars au bord de l'eau, dive shops partout. Meilleure base pour organiser la plongée. Snorkeling direct depuis la plage.", icon: "🏖️" },
-      { nom: "Mae Haad (port)", vibe: "Arrivée des ferries · Pratique", tip: "Zone de débarquement. Quelques bons restos. Pas idéal pour rester.", icon: "⛴️" },
-      { nom: "Chalok Ban Kao (sud)", vibe: "Calme · Belle baie · Moins de monde", tip: "Plus reposant que Sairee. Bons dive shops, belle vue sur Freedom Beach. Pour celles qui veulent la plongée sans l'animation.", icon: "🌊" },
-      { nom: "Tanote Bay / Mango Bay (est)", vibe: "Sauvage · Isolé · Snorkeling exceptionnel", tip: "Accessible en bateau ou scooter depuis Sairee (route cabossée). Eaux cristallines, coraux intacts, presque personne. Y passer une journée entière.", icon: "🪸" },
-    ],
-    food: [
-      { nom: "Restaurants Sairee Beach", detail: "Bonne scène food. Italian-thai, sushi, burgers, bols de riz. Après les plongées, on mange bien.", must: false },
-      { nom: "Barracuda Restaurant & Bar", detail: "Sur la plage à Sairee. Sunset + cocktail + seafood = la combinaison parfaite.", must: true },
-      { nom: "Marché du matin Mae Haad", detail: "Fruits frais, smoothies, petits dej thaïs à 1–2€. À faire chaque matin avant la plongée.", must: false },
-    ],
-    activites: [
-      { icon: "🤿", nom: "PADI Open Water (si non certifiée)", detail: "Koh Tao = la ville la moins chère et la plus simple pour passer son PADI. Formation 3 jours ~280–320€ (international standard). Inclut théorie, piscine, 4 plongées en mer. Dive shops recommandés : Big Blue, Crystal, Ban's Diving." },
-      { icon: "🤿", nom: "Fun dives (si certifiée)", detail: "Japanese Gardens, Chumphon Pinnacle, Southwest Pinnacle, HTMS Sattakut (épave). 10–15€ la plongée. Pack de 10 plongées = meilleur rapport." },
-      { icon: "🦈", nom: "Shark Bay snorkeling", detail: "Gratuit depuis la plage. Requins-bambous dormeurs fréquents au fond. Y aller à 6h30 avant les tours. Le plus accessible sans plongée." },
-      { icon: "🪸", nom: "Japanese Gardens (snorkeling)", detail: "Site de snorkeling / plongée. Coraux immenses, poissons perroquets, anémones et poissons-clowns. Accessible en kayak ou tour depuis Sairee." },
-      { icon: "🌅", nom: "Sunset depuis Sairee chaque soir", detail: "Rituel immuable. Un verre au John Suwan Viewpoint ou aux pieds dans le sable à Sairee. Jamais deux fois le même. Ne jamais rater." },
-      { icon: "🏔️", nom: "John Suwan Viewpoint trek", detail: "20–25 min de marche depuis Chalok. Vue 360° sur l'île, Koh Phangan en fond. Y aller au lever ou coucher du soleil. Gratuit, chemin balisé." },
-    ],
-    shopping: [
-      { nom: "T-shirts de dive & souvenirs", detail: "Chaque école de plongée a son merch. Les t-shirts 'Koh Tao diver' sont partout. Acheter chez ton dive shop.", icon: "👕" },
-      { nom: "Bijoux et bracelets", detail: "Petits marchés le long de Sairee Beach. Bijoux coquillages, bracelets brésiliens, attrape-rêves.", icon: "💎" },
-    ],
-    transport_out: {
-      de: "Koh Tao → Chumphon (ferry)",
-      vers: "Bangkok (Suvarnabhumi)",
-      moyen: "⛴️ Ferry Lompraya + ✈️ Vol intérieur Don Mueang",
-      duree: "Ferry 2h + Vol 1h15 · Total ~5–6h",
-      prix: "Ferry ~15€ + Vol ~30–50€",
-      conseil: "Ferry Lompraya tôt le matin → Chumphon → bus vers aéroport Chumphon (ou Surat Thani) → vol Don Mueang. Arriver Bangkok soir du 17. Option romantique : ferry → Chumphon + train de nuit sleeper → Bangkok 7h.",
-    },
-    heberg: [
-      { type: "Bungalow dive resort Sairee", budget: "30–70€/nuit", tip: "Big Blue Resort, Crystal Dive Resort. Inclut accès piscine et facilite l'organisation plongée." },
-      { type: "Boutique hôtel Chalok", budget: "40–80€/nuit", tip: "Jamahkiri Resort. Calme, vue mer, moins de monde qu'à Sairee." },
-      { type: "Villa avec vue colline", budget: "60–120€/nuit", tip: "Villas privées sur les hauteurs. Vue panoramique sur les deux côtés de l'île.", },
-    ],
-  },
-  {
-    id: "bkk2", emoji: "🏙️", name: "Bangkok", tag: "Retour", color: G.copper,
-    nights: "2N", dates: "17–18 août", periode: "Boucle finale",
-    meteo: "🌦️ 32°C · Août chaud et humide · Averses possible · Pas de problème pour visiter",
-    intro: "Le bouclage du voyage. Bangkok pour finir — Ayutthaya en day trip, les derniers massages, les derniers achats, le dernier dîner en rooftop. Vol retour le 19 août à 02h30.",
-    urgence: { icon: "✈️", text: "Vol retour 19 août à 02h30 (Suvarnabhumi BKK → DOH → CDG). Quitter l'hôtel le 18 août vers 22h30. Check-in en ligne 48h avant = dès le 17 août à 02h30." },
-    quartiers: [
-      { nom: "Ari", vibe: "Hipster · Local · Cafés · Marchés", tip: "Le meilleur quartier pour finir. Aucun touriste. Vie de quartier réelle, bons restos locaux, coffee shops. BTS Ari direct. 30 min de Suvarnabhumi.", icon: "☕" },
-      { nom: "Thonglor / Ekkamai", vibe: "Food scene · Bars locaux · Branchés", tip: "Bangkok la nuit, version locale. Pas Khaosan. Restaurants japonais, bars à cocktails, terrasses. Le vrai Bangkok nocturne.", icon: "🍸" },
-    ],
-    food: [
-      { nom: "Yaowarat (Chinatown) – dernier soir", detail: "Le grand final. Reprendre ce qui était le premier soir — mais cette fois tu sais commander, tu sais où aller. Boucler la boucle.", must: true },
-      { nom: "Or Tor Kor Market", detail: "Le meilleur marché alimentaire de Bangkok. Acheter les dernières épices, pâtes de curry, snacks thaïs pour ramener.", must: false },
-      { nom: "Rooftop bar final", detail: "Vertigo (Banyan Tree), Sky Bar (State Tower, vue depuis Hangover), Octave Rooftop. Marquer la fin du voyage avec vue sur la skyline.", must: true },
-    ],
-    activites: [
-      { icon: "🏛️", nom: "Ayutthaya – day trip", detail: "Ancienne capitale du royaume de Siam. 1h30 depuis la gare Hua Lamphong en train (~60 THB). Temples en ruines du 14e siècle, statues décapitées envahies par les racines d'arbres. Louer un vélo sur place pour aller de temple en temple. Une des plus belles journées possibles." },
-      { icon: "💆", nom: "Massage thaï final", detail: "Wat Pho Massage School (dans l'enceinte du temple) ou Health Land. Le vrai massage traditionnel. 1h = ~10€. En faire au moins 2 sur ces 2 nuits." },
-      { icon: "🛍️", nom: "Chatuchak Weekend Market", detail: "Si tu es là un samedi ou dimanche. Le plus grand marché extérieur du monde. Artisanat, vintage, plantes, fringues, céramiques. Y aller à 8h avant la chaleur." },
-      { icon: "🛕", nom: "Wat Pho / Grand Palace (si pas fait à l'aller)", detail: "Le Bouddha couché de 46m. Mosaïques nacrées. Le Grand Palace : la salle des miroirs thaïe. Arriver à 8h, sortir à 11h avant la foule de midi." },
-    ],
-    shopping: [
-      { nom: "Derniers achats tailleurs", detail: "Si tu avais commandé des habits sur-mesure à l'aller (premier passage Bangkok) — c'est maintenant que tu récupères.", icon: "🧵" },
-      { nom: "Cadeaux alimentaires Or Tor Kor", detail: "Pâtes de curry, thé thaï, épices, galettes de riz. Le meilleur endroit pour ramener de vraies choses.", icon: "🌶️" },
-      { nom: "MBK Center / Platinum Mall", detail: "Shopping de masse. Fringues, accessoires, copies. Marchander systématiquement (–30 à –40% premier prix).", icon: "🏬" },
-    ],
-    transport_out: {
-      de: "Bangkok – hôtel Ari ou Thonglor",
-      vers: "Aéroport Suvarnabhumi (BKK)",
-      moyen: "🚖 Grab / Taxi",
-      duree: "30–60 min selon trafic",
-      prix: "10–15€",
-      conseil: "Partir le 18 août à 22h30 maximum. Enregistrement Qatar Airways ouvre 3h avant (23h30). Check-in en ligne depuis le 17 août à 02h30. Terminal principal Suvarnabhumi = Qatar Airways.",
-    },
-    heberg: [
-      { type: "Hôtel boutique Ari", budget: "50–100€/nuit", tip: "Arize Hotel Sukhumvit, S31 Sukhumvit. Bien placé pour BTS." },
-      { type: "Hôtel lifestyle Thonglor", budget: "70–120€/nuit", tip: "Hotel Muse, SO Bangkok. Finir en beauté." },
-    ],
-  },
-];
-
-const PRATIQUE = {
-  visa: {
-    titre: "Visa & Entrée",
-    icon: "🛂",
-    items: [
-      { q: "Passeport valide", r: "Minimum 6 mois après la date de retour (19 août 2026). Vérifier MAINTENANT." },
-      { q: "Visa exemption", r: "La France bénéficie d'une exemption de visa pour la Thaïlande : 30 jours automatiques à l'arrivée. Depuis 2024 : prolongé à 60 jours. Vérifier la règle en vigueur en juillet 2026." },
-      { q: "Carte d'embarquement retour", r: "Les douaniers peuvent demander une preuve de billet retour. Ton vol Qatar du 19 août suffit." },
-      { q: "Formulaire TM6", r: "Supprimé depuis 2022. Plus de formulaire d'arrivée à remplir dans l'avion." },
-    ],
-  },
-  sante: {
-    titre: "Santé & Vaccins",
-    icon: "💊",
-    items: [
-      { q: "Hépatite A + B", r: "Recommandé. Si pas fait : consulter un médecin du voyage 6–8 semaines avant." },
-      { q: "Typhoid", r: "Recommandé pour les voyageurs qui mangent souvent en street food." },
-      { q: "Rage", r: "Recommandé si contact avec animaux sauvages (Khao Sok, éléphants)." },
-      { q: "Dengue & Malaria", r: "Risque faible en zones touristiques. Répulsif DEET 30–50% obligatoire. Moustiquaire si bungalows basiques jungle." },
-      { q: "Assurance voyage", r: "OBLIGATOIRE. Couvrir rapatriement + plongée sous-marine (vérifier la clause activités sportives). AVI International, Chapka, ou carte Visa Premier si tu l'as." },
-      { q: "Pharmacie de voyage", r: "Imodium, Smecta, Doliprane, antihistaminique, crème solaire 50+, DEET, pansements, sérum physiologique." },
-    ],
-  },
-  argent: {
-    titre: "Argent & Paiement",
-    icon: "💳",
-    items: [
-      { q: "Monnaie", r: "Baht thaïlandais (THB). 1€ ≈ 38–40 THB en 2026 (vérifier). Ne jamais changer à CDG — taux catastrophiques." },
-      { q: "Wise Card (priorité)", r: "Retrait ATM au taux réel, sans frais cachés. Préparer la carte Wise AVANT le départ. Mettre 1 500–2 000€ dessus." },
-      { q: "ATM thaïlandais", r: "Frais de 220 THB (~6€) par retrait, quelque soit la banque. Faire de gros retraits peu fréquents. Préférer les ATM Kasikorn (K-Bank) ou Bangkok Bank." },
-      { q: "Cash obligatoire", r: "Les îles, les marchés, les tuk-tuks, les songthaews, les ferries locaux : cash only. Toujours avoir 2 000–3 000 THB sur soi." },
-      { q: "Budget journalier indicatif", r: "Budget confort : 60–100€/jour à 2. Budget backpacker : 30–50€/jour. Budget luxe : 120€+/jour." },
-    ],
-  },
-  apps: {
-    titre: "Apps Indispensables",
-    icon: "📱",
-    items: [
-      { q: "Grab", r: "Le Uber thaïlandais. Taxi, moto-taxi, livraison. Fonctionne dans toutes les villes. ESSENTIEL." },
-      { q: "Google Maps offline", r: "Télécharger AVANT d'atterrir. Thaïlande entière. Fonctionne sans connexion pour navigation." },
-      { q: "Wise", r: "Paiements et retraits au taux réel. Meilleure carte voyage." },
-      { q: "Booking / Agoda", r: "Agoda est dominant en Asie du Sud-Est, souvent moins cher que Booking pour la Thaïlande." },
-      { q: "Airalo / SIM locale", r: "eSIM ou SIM thaïlandaise à l'aéroport. AIS ou DTAC : ~10€ pour 15 jours data illimitée." },
-      { q: "12Go Asia", r: "Réservation ferries, trains, buses, minivans inter-villes. Tout en un." },
-      { q: "XE Currency", r: "Taux de change en temps réel pour ne pas se faire arnaquer." },
-    ],
-  },
-  meteo: {
-    titre: "Météo & Saison",
-    icon: "🌦️",
-    items: [
-      { q: "Juillet–Août : saison des pluies", r: "Basse saison côté Andaman (Kao Lak). Quelques avantages : moins de monde, prix réduits, végétation luxuriante. Les pluies durent rarement toute la journée." },
-      { q: "Côté Golfe (Phangan, Tao)", r: "Août est plus clément sur la côte est. Bon temps globalement, averses ponctuelles." },
-      { q: "Nord (Chiang Mai)", r: "Saison verte, brumes matinales, températures plus douces. Les treks sont magnifiques sous la pluie." },
-      { q: "Ce qu'il faut emporter", r: "Vêtements légers, 1 imperméable fin, chaussures fermées pour trekking, tongs, maillots ×3 minimum." },
-    ],
-  },
-};
-
-const BUDGET = [
-  { poste: "Vols internationaux", icon: "✈️", montant: "600–900€", detail: "Déjà réservé Qatar Airways CDG-BKK", coul: G.copper },
-  { poste: "Train de nuit × 2", icon: "🚆", montant: "30–50€", detail: "BKK↔Chiang Mai wagon-lit 2e classe", coul: G.teal },
-  { poste: "Vols intérieurs", icon: "🛩️", montant: "30–60€", detail: "Don Mueang → Phuket (AirAsia / Thai Lion)", coul: G.gold },
-  { poste: "Ferries inter-îles", icon: "⛴️", montant: "40–60€", detail: "Khao Sok → Phangan → Koh Tao → retour continent", coul: G.sage },
-  { poste: "Hébergements", icon: "🛖", montant: "800–1400€", detail: "21 nuits à 2 · 40–70€/nuit moyenne", coul: G.plum },
-  { poste: "Food & restaurants", icon: "🍜", montant: "400–600€", detail: "Street food + restos · ~20–30€/jour à 2", coul: G.copper },
-  { poste: "Activités", icon: "🐘", montant: "300–500€", detail: "Éléphants, PADI, day trips, kayak, yoga", coul: G.teal },
-  { poste: "Shopping", icon: "🛍️", montant: "200–500€", detail: "Marchés, tailleurs, souvenirs · selon envie", coul: G.gold },
-  { poste: "Transports locaux", icon: "🛺", montant: "80–150€", detail: "Tuk-tuk, songthaew, Grab, scooters", coul: G.sage },
-  { poste: "Imprévus / confort", icon: "🧳", montant: "150–300€", detail: "Toujours avoir un matelas de sécurité", coul: G.dim },
-];
-
-/* ─── COMPONENTS ─────────────────────────────────────────────── */
-
-const Tag = ({ children, color }) => (
-  <span style={{
-    background: `${color}25`, color, border: `1px solid ${color}55`,
-    borderRadius: 20, padding: "2px 10px", fontSize: 11, fontWeight: 600, letterSpacing: 0.3,
-    display: "inline-block",
-  }}>{children}</span>
-);
-
-const Pill = ({ label, val, color = G.gold }) => (
-  <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "10px 14px", background: G.card, borderRadius: 10, border: `1px solid ${G.border}` }}>
-    <span style={{ fontSize: 14 }}>{label}</span>
-    <span style={{ color, fontSize: 12, fontWeight: 600, flex: 1 }}>{val}</span>
-  </div>
-);
-
-const SectionTitle = ({ children }) => (
-  <div style={{ color: G.muted, fontSize: 10, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", marginBottom: 12, marginTop: 4 }}>
-    {children}
-  </div>
-);
-
-const Divider = () => <div style={{ height: 1, background: G.border, margin: "16px 0" }} />;
-
-/* ─── ROUTE OVERVIEW ─────────────────────────────────────────── */
-const RouteView = () => (
-  <div style={{ padding: "0 16px 100px" }} className="fade-up">
-    {/* Hero stats */}
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 24 }}>
-      {[
-        { val: "21", label: "nuits", icon: "🌙" },
-        { val: "7", label: "étapes", icon: "📍" },
-        { val: "2", label: "trains nuit", icon: "🚆" },
-      ].map((s, i) => (
-        <div key={i} style={{ background: G.card, border: `1px solid ${G.border}`, borderRadius: 14, padding: "16px 10px", textAlign: "center" }}>
-          <div style={{ fontSize: 22 }}>{s.icon}</div>
-          <div style={{ color: G.gold, fontSize: 26, fontWeight: 700, fontFamily: "'Playfair Display', serif", lineHeight: 1.1 }}>{s.val}</div>
-          <div style={{ color: G.muted, fontSize: 11, marginTop: 2 }}>{s.label}</div>
-        </div>
-      ))}
-    </div>
-
-    {/* Flight info */}
-    <div style={{ background: `linear-gradient(135deg, ${G.copper}22, ${G.gold}11)`, border: `1px solid ${G.copper}44`, borderRadius: 16, padding: 16, marginBottom: 16 }}>
-      <div style={{ color: G.copper, fontSize: 10, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>✈️ Qatar Airways · Vols confirmés</div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <div>
-          <div style={{ color: G.text, fontSize: 18, fontWeight: 700, fontFamily: "'Playfair Display', serif" }}>CDG → BKK</div>
-          <div style={{ color: G.muted, fontSize: 11, marginTop: 2 }}>29 jul 16:25 → 30 jul 12:55</div>
-          <div style={{ color: G.dim, fontSize: 10 }}>Via Doha · 6h20 + 2h15 transit + 6h55</div>
-        </div>
-        <div style={{ background: G.copper, color: "white", borderRadius: 8, padding: "4px 12px", fontSize: 11, fontWeight: 700 }}>ALLER</div>
-      </div>
-      <Divider />
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <div style={{ color: G.text, fontSize: 18, fontWeight: 700, fontFamily: "'Playfair Display', serif" }}>BKK → CDG</div>
-          <div style={{ color: G.muted, fontSize: 11, marginTop: 2 }}>19 août 02:30 → 19 août 15:20</div>
-          <div style={{ color: G.dim, fontSize: 10 }}>Via Doha · 6h35 + 4h25 transit + 6h50</div>
-        </div>
-        <div style={{ background: G.copper, color: "white", borderRadius: 8, padding: "4px 12px", fontSize: 11, fontWeight: 700 }}>RETOUR</div>
-      </div>
-    </div>
-
-    {/* Night train highlight */}
-    <div style={{ background: `${G.teal}18`, border: `1px solid ${G.teal}44`, borderRadius: 16, padding: 16, marginBottom: 24 }}>
-      <div style={{ color: G.teal, fontSize: 10, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", marginBottom: 12 }}>🚆 Trains de nuit SRT — L'expérience iconique</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {[
-          { trajet: "Bangkok → Chiang Mai", depart: "30 juil · ~18h00", arrivee: "31 juil · ~07h30" },
-          { trajet: "Chiang Mai → Bangkok", depart: "3 août · ~18h00", arrivee: "4 août · ~07h30" },
-        ].map((t, i) => (
-          <div key={i} style={{ background: G.surface, borderRadius: 10, padding: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
-              <div style={{ color: G.text, fontSize: 13, fontWeight: 600 }}>{t.trajet}</div>
-              <div style={{ color: G.muted, fontSize: 11, marginTop: 2 }}>Départ {t.depart}</div>
-              <div style={{ color: G.teal, fontSize: 11 }}>Arrivée {t.arrivee}</div>
-            </div>
-            <div style={{ textAlign: "right" }}>
-              <div style={{ color: G.gold, fontSize: 13, fontWeight: 700 }}>~20€</div>
-              <div style={{ color: G.dim, fontSize: 10 }}>wagon-lit 2e cl.</div>
-            </div>
-          </div>
-        ))}
-      </div>
-      <div style={{ marginTop: 12, color: G.muted, fontSize: 11, lineHeight: 1.7 }}>
-        💡 Réserver sur <span style={{ color: G.gold }}>thairailwayticket.com</span> · Train n°9 ou n°13 · Wagon-lit 2e classe = couchette + rideau + clim + linge propre
-      </div>
-    </div>
-
-    {/* Timeline */}
-    <SectionTitle>Chronologie complète</SectionTitle>
-    <div style={{ position: "relative", paddingLeft: 20 }}>
-      <div style={{ position: "absolute", left: 7, top: 0, bottom: 0, width: 1, background: `${G.border}` }} />
-      {ROUTE.map((r, i) => (
-        <div key={i} style={{ display: "flex", gap: 14, marginBottom: 14, position: "relative" }}>
-          <div style={{
-            position: "absolute", left: -20, top: 4,
-            width: 14, height: 14, borderRadius: "50%",
-            background: r.type === "transport" ? "transparent" : r.color,
-            border: r.type === "transport" ? "none" : `2px solid ${r.color}`,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 8, flexShrink: 0,
-          }}>
-            {r.type === "transport" && <span style={{ fontSize: 12 }}>{r.code}</span>}
-          </div>
-          <div style={{ paddingLeft: 4 }}>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              {r.type !== "transport" && <span style={{ color: r.color, fontSize: 13, fontWeight: 700 }}>{r.label}</span>}
-              {r.type === "transit" && <Tag color={G.dim}>Escale</Tag>}
-              {r.type === "transport" && <span style={{ color: G.muted, fontSize: 12 }}>{r.label}</span>}
-            </div>
-            <div style={{ color: G.muted, fontSize: 11 }}>{r.date}</div>
-          </div>
-        </div>
-      ))}
-    </div>
-  </div>
-);
-
-/* ─── DESTINATION DETAIL ─────────────────────────────────────── */
-const DestDetail = ({ dest }) => {
-  const [subTab, setSubTab] = useState("quartiers");
-  const tabs = [
-    { key: "quartiers", label: "📍 Quartiers" },
-    { key: "food", label: "🍜 Food" },
-    { key: "activites", label: "🎯 Activités" },
-    { key: "shopping", label: "🛍️ Shopping" },
-    { key: "heberg", label: "🏨 Séjour" },
-    { key: "transport", label: "🚌 Départ" },
-  ].filter(t => t.key !== "shopping" || dest.shopping?.length > 0);
-
-  return (
-    <div className="fade-up">
-      {/* Destination header */}
-      <div style={{
-        background: `linear-gradient(135deg, ${dest.color}28 0%, ${dest.color}08 100%)`,
-        border: `1px solid ${dest.color}33`, borderRadius: 20, padding: 20, marginBottom: 16,
-      }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-          <div>
-            <span style={{ fontSize: 32 }}>{dest.emoji}</span>
-            <div style={{ color: G.text, fontSize: 26, fontWeight: 700, fontFamily: "'Playfair Display', serif", lineHeight: 1.1, marginTop: 4 }}>{dest.name}</div>
-            <div style={{ color: dest.color, fontSize: 13, fontWeight: 500, marginTop: 2 }}>{dest.periode}</div>
-          </div>
-          <div style={{ textAlign: "right" }}>
-            <div style={{ background: dest.color, color: "white", borderRadius: 12, padding: "6px 14px", fontSize: 14, fontWeight: 700, marginBottom: 6 }}>{dest.nights}</div>
-            <div style={{ color: G.muted, fontSize: 11 }}>{dest.dates}</div>
-          </div>
-        </div>
-        <p style={{ color: G.muted, fontSize: 12, lineHeight: 1.8 }}>{dest.intro}</p>
-        <div style={{ marginTop: 10, color: G.muted, fontSize: 11 }}>{dest.meteo}</div>
-      </div>
-
-      {dest.urgence && (
-        <div style={{
-          background: `${dest.urgence.icon === "⚠️" ? G.red : dest.color}12`,
-          border: `1px solid ${dest.urgence.icon === "⚠️" ? G.red : dest.color}44`,
-          borderRadius: 14, padding: "12px 16px", marginBottom: 16,
-          display: "flex", gap: 10, alignItems: "flex-start",
-        }}>
-          <span style={{ fontSize: 18 }}>{dest.urgence.icon}</span>
-          <span style={{ color: G.text, fontSize: 12, lineHeight: 1.7 }}>{dest.urgence.text}</span>
-        </div>
-      )}
-
-      {/* Sub-tabs */}
-      <div style={{ overflowX: "auto", marginBottom: 16, paddingBottom: 4 }}>
-        <div style={{ display: "flex", gap: 6, minWidth: "max-content" }}>
-          {tabs.map(t => (
-            <button key={t.key} onClick={() => setSubTab(t.key)} style={{
-              background: subTab === t.key ? dest.color : G.card,
-              color: subTab === t.key ? "white" : G.muted,
-              border: `1px solid ${subTab === t.key ? dest.color : G.border}`,
-              borderRadius: 20, padding: "7px 14px", fontSize: 11, fontWeight: 600,
-              cursor: "pointer", whiteSpace: "nowrap", transition: "all 0.2s",
-            }}>{t.label}</button>
-          ))}
-        </div>
-      </div>
-
-      {/* Quartiers */}
-      {subTab === "quartiers" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {dest.quartiers.map((q, i) => (
-            <div key={i} className="card-hover" style={{ background: G.card, border: `1px solid ${G.border}`, borderRadius: 14, padding: 16, borderLeft: `3px solid ${dest.color}` }}>
-              <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 6 }}>
-                <span style={{ fontSize: 20 }}>{q.icon}</span>
-                <div>
-                  <div style={{ color: G.text, fontSize: 14, fontWeight: 600 }}>{q.nom}</div>
-                  <div style={{ color: dest.color, fontSize: 10, fontWeight: 500 }}>{q.vibe}</div>
-                </div>
-              </div>
-              <div style={{ color: G.muted, fontSize: 12, lineHeight: 1.7, borderTop: `1px solid ${G.border}`, paddingTop: 10 }}>
-                💡 {q.tip}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Food */}
-      {subTab === "food" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {dest.food.map((f, i) => (
-            <div key={i} className="card-hover" style={{ background: G.card, border: `1px solid ${f.must ? `${dest.color}55` : G.border}`, borderRadius: 14, padding: 16 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-                <div style={{ color: G.text, fontSize: 14, fontWeight: 600 }}>🍽️ {f.nom}</div>
-                {f.must && <Tag color={dest.color}>Must try</Tag>}
-              </div>
-              <div style={{ color: G.muted, fontSize: 12, lineHeight: 1.7 }}>{f.detail}</div>
-            </div>
-          ))}
-          {dest.food.length === 0 && <div style={{ color: G.muted, fontSize: 13, textAlign: "center", padding: 24 }}>Options intégrées à l'hébergement pour cette étape.</div>}
-        </div>
-      )}
-
-      {/* Activités */}
-      {subTab === "activites" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {dest.activites.map((a, i) => (
-            <div key={i} className="card-hover" style={{ background: G.card, border: `1px solid ${G.border}`, borderRadius: 14, padding: 16, display: "flex", gap: 14 }}>
-              <div style={{ fontSize: 28, lineHeight: 1, flexShrink: 0 }}>{a.icon}</div>
-              <div>
-                <div style={{ color: G.text, fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{a.nom}</div>
-                <div style={{ color: G.muted, fontSize: 12, lineHeight: 1.7 }}>{a.detail}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Shopping */}
-      {subTab === "shopping" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {dest.shopping?.map((s, i) => (
-            <div key={i} className="card-hover" style={{ background: G.card, border: `1px solid ${G.border}`, borderRadius: 14, padding: 16, display: "flex", gap: 14 }}>
-              <div style={{ fontSize: 24, lineHeight: 1, flexShrink: 0 }}>{s.icon}</div>
-              <div>
-                <div style={{ color: G.text, fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{s.nom}</div>
-                <div style={{ color: G.muted, fontSize: 12, lineHeight: 1.7 }}>{s.detail}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Hébergement */}
-      {subTab === "heberg" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <div style={{ background: `${G.gold}11`, border: `1px solid ${G.gold}33`, borderRadius: 12, padding: 12, marginBottom: 4 }}>
-            <div style={{ color: G.gold, fontSize: 11, fontWeight: 700, marginBottom: 4 }}>💡 Recommandation générale</div>
-            <div style={{ color: G.muted, fontSize: 12, lineHeight: 1.6 }}>Réserver les hébergements insolites (floating bungalows Khao Sok, villas Phangan) 2–3 mois à l'avance. Pour les îles, Agoda est souvent moins cher que Booking.</div>
-          </div>
-          {dest.heberg?.map((h, i) => (
-            <div key={i} className="card-hover" style={{ background: G.card, border: `1px solid ${G.border}`, borderRadius: 14, padding: 16 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                <div style={{ color: G.text, fontSize: 13, fontWeight: 600 }}>🏨 {h.type}</div>
-                <div style={{ color: G.gold, fontSize: 13, fontWeight: 700 }}>{h.budget}</div>
-              </div>
-              <div style={{ color: G.muted, fontSize: 12, lineHeight: 1.6 }}>{h.tip}</div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Transport */}
-      {subTab === "transport" && dest.transport_out && (
-        <div style={{ background: G.card, border: `1px solid ${G.border}`, borderRadius: 16, padding: 20 }}>
-          <div style={{ color: G.text, fontSize: 15, fontWeight: 700, fontFamily: "'Playfair Display', serif", marginBottom: 16 }}>Prochaine étape →</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {[
-              { l: "De", v: dest.transport_out.de },
-              { l: "Vers", v: dest.transport_out.vers },
-              { l: "Moyen", v: dest.transport_out.moyen },
-              { l: "Durée", v: dest.transport_out.duree },
-              { l: "Prix", v: dest.transport_out.prix },
-            ].map((r, i) => (
-              <div key={i} style={{ display: "flex", gap: 12 }}>
-                <div style={{ color: dest.color, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, minWidth: 40, paddingTop: 2 }}>{r.l}</div>
-                <div style={{ color: G.text, fontSize: 13, lineHeight: 1.5, flex: 1 }}>{r.v}</div>
-              </div>
-            ))}
-            <div style={{ background: `${dest.color}12`, border: `1px solid ${dest.color}33`, borderRadius: 10, padding: 12, marginTop: 8 }}>
-              <div style={{ color: dest.color, fontSize: 10, fontWeight: 700, marginBottom: 6 }}>💡 Conseil pratique</div>
-              <div style={{ color: G.muted, fontSize: 12, lineHeight: 1.7 }}>{dest.transport_out.conseil}</div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-/* ─── DESTINATIONS VIEW ──────────────────────────────────────── */
-const DestinationsView = () => {
-  const [active, setActive] = useState(0);
-  return (
-    <div style={{ padding: "0 0 100px" }}>
-      {/* Horizontal dest picker */}
-      <div style={{ overflowX: "auto", padding: "0 16px 16px" }}>
-        <div style={{ display: "flex", gap: 10, minWidth: "max-content" }}>
-          {DESTINATIONS.map((d, i) => (
-            <button key={d.id} onClick={() => setActive(i)} style={{
-              background: i === active ? d.color : G.card,
-              border: `1px solid ${i === active ? d.color : G.border}`,
-              borderRadius: 16, padding: "12px 14px", cursor: "pointer",
-              textAlign: "left", minWidth: 90, transition: "all 0.25s",
-              boxShadow: i === active ? `0 4px 20px ${d.color}44` : "none",
-            }}>
-              <div style={{ fontSize: 20, marginBottom: 4 }}>{d.emoji}</div>
-              <div style={{ color: i === active ? "white" : G.text, fontSize: 12, fontWeight: 700, lineHeight: 1.2 }}>{d.name}</div>
-              <div style={{ color: i === active ? "rgba(255,255,255,0.7)" : G.muted, fontSize: 10, marginTop: 2 }}>{d.nights}</div>
-            </button>
-          ))}
-        </div>
-      </div>
-      <div style={{ padding: "0 16px" }}>
-        <DestDetail dest={DESTINATIONS[active]} />
-      </div>
-    </div>
-  );
-};
-
-/* ─── PRATIQUE VIEW ──────────────────────────────────────────── */
-const PratiqueView = () => {
-  const [open, setOpen] = useState(null);
-  const sections = Object.values(PRATIQUE);
-  return (
-    <div style={{ padding: "0 16px 100px" }} className="fade-up">
-      {sections.map((s, si) => (
-        <div key={si} style={{ marginBottom: 20 }}>
-          <SectionTitle>{s.icon} {s.titre}</SectionTitle>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {s.items.map((item, ii) => {
-              const key = `${si}-${ii}`;
-              const isOpen = open === key;
-              return (
-                <div key={ii} style={{
-                  background: G.card, border: `1px solid ${isOpen ? G.gold + "55" : G.border}`,
-                  borderRadius: 12, overflow: "hidden", transition: "border-color 0.2s",
-                }}>
-                  <button onClick={() => setOpen(isOpen ? null : key)} style={{
-                    width: "100%", padding: "13px 16px", background: "none",
-                    display: "flex", justifyContent: "space-between", alignItems: "center",
-                    cursor: "pointer",
-                  }}>
-                    <span style={{ color: G.text, fontSize: 13, fontWeight: 500, textAlign: "left" }}>{item.q}</span>
-                    <span style={{ color: G.gold, fontSize: 16, transform: isOpen ? "rotate(45deg)" : "none", transition: "transform 0.2s", flexShrink: 0 }}>+</span>
-                  </button>
-                  {isOpen && (
-                    <div style={{ padding: "0 16px 14px", color: G.muted, fontSize: 12, lineHeight: 1.8, borderTop: `1px solid ${G.border}` }}>
-                      <div style={{ paddingTop: 12 }}>{item.r}</div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-};
-
-/* ─── BUDGET VIEW ────────────────────────────────────────────── */
-const BudgetView = () => {
-  const ranges = BUDGET.map(b => {
-    const [low, high] = b.montant.replace(/[€]/g, "").split("–").map(Number);
-    return { low: low || 0, high: high || low || 0 };
-  });
-  const totalLow = ranges.reduce((s, r) => s + r.low, 0);
-  const totalHigh = ranges.reduce((s, r) => s + r.high, 0);
-  const maxHigh = Math.max(...ranges.map(r => r.high));
-
-  return (
-    <div style={{ padding: "0 16px 100px" }} className="fade-up">
-      {/* Total */}
-      <div style={{
-        background: `linear-gradient(135deg, ${G.gold}22, ${G.copper}11)`,
-        border: `1px solid ${G.gold}44`, borderRadius: 20, padding: 20, marginBottom: 24, textAlign: "center",
-      }}>
-        <div style={{ color: G.muted, fontSize: 11, letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>Budget total estimé · 2 personnes</div>
-        <div style={{ color: G.gold, fontFamily: "'Playfair Display', serif", fontSize: 36, fontWeight: 700 }}>
-          {totalLow.toLocaleString()}€ – {totalHigh.toLocaleString()}€
-        </div>
-        <div style={{ color: G.muted, fontSize: 12, marginTop: 8 }}>
-          Soit ~{Math.round(totalLow / 2 / 21)}€ – ~{Math.round(totalHigh / 2 / 21)}€ / personne / jour
-        </div>
-      </div>
-
-      <SectionTitle>Répartition par poste</SectionTitle>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {BUDGET.map((b, i) => (
-          <div key={i} style={{ background: G.card, border: `1px solid ${G.border}`, borderRadius: 14, padding: 14 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                <span style={{ fontSize: 20 }}>{b.icon}</span>
-                <div>
-                  <div style={{ color: G.text, fontSize: 13, fontWeight: 600 }}>{b.poste}</div>
-                  <div style={{ color: G.muted, fontSize: 11 }}>{b.detail}</div>
-                </div>
-              </div>
-              <div style={{ color: b.coul, fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", marginLeft: 8 }}>{b.montant}</div>
-            </div>
-            {/* Bar */}
-            <div style={{ height: 4, background: G.surface, borderRadius: 2, overflow: "hidden" }}>
-              <div style={{
-                height: "100%", borderRadius: 2,
-                background: `linear-gradient(to right, ${b.coul}88, ${b.coul})`,
-                width: `${(ranges[i].high / maxHigh) * 100}%`,
-                transition: "width 0.5s ease",
-              }} />
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div style={{ background: G.card, border: `1px solid ${G.border}`, borderRadius: 14, padding: 16, marginTop: 20 }}>
-        <div style={{ color: G.gold, fontSize: 12, fontWeight: 700, marginBottom: 10 }}>💡 Astuces économies</div>
-        {[
-          "Retrait ATM : maximum 20 000 THB (~500€) d'un coup — frais fixes de 220 THB/retrait.",
-          "Manger midi en restaurant local : 100–200 THB (3–5€). Le soir en « touriste » : 400–600 THB.",
-          "Plongée PADI à Koh Tao : un des endroits les moins chers du monde pour certifier.",
-          "Scooter de location : ~200 THB/jour (5€). La meilleure façon de visiter les îles.",
-          "Ferries : acheter les billets la veille à l'hébergement = même prix, pas de surprise.",
-        ].map((tip, i) => (
-          <div key={i} style={{ color: G.muted, fontSize: 12, lineHeight: 1.7, display: "flex", gap: 8, marginBottom: 6 }}>
-            <span style={{ color: G.gold }}>→</span> {tip}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-/* ─── APP ────────────────────────────────────────────────────── */
-export default function ThailandGuide() {
-  const [page, setPage] = useState("route");
-
-  const navItems = [
-    { key: "route", icon: "🗺️", label: "Route" },
-    { key: "etapes", icon: "📍", label: "Étapes" },
-    { key: "pratique", icon: "🎒", label: "Pratique" },
-    { key: "budget", icon: "💰", label: "Budget" },
-  ];
-
-  return (
-    <>
-      <style>{css}</style>
-      <div style={{ fontFamily: "'DM Sans', sans-serif", background: G.bg, minHeight: "100vh", maxWidth: 480, margin: "0 auto", color: G.text }}>
-
-        {/* Header */}
-        <div style={{
-          background: `linear-gradient(160deg, #0C0F1A 0%, #141824 40%, ${G.gold}18 100%)`,
-          padding: "28px 20px 20px", position: "sticky", top: 0, zIndex: 100,
-          borderBottom: `1px solid ${G.border}`,
-        }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
-            <div>
-              <div style={{ color: G.gold, fontSize: 10, fontWeight: 700, letterSpacing: 3, textTransform: "uppercase", marginBottom: 4 }}>Guide de voyage</div>
-              <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, fontWeight: 700, lineHeight: 1, letterSpacing: -0.5 }}>
-                Thaï<span style={{ color: G.gold }}>lande</span>
-              </div>
-            </div>
-            <div style={{ textAlign: "right" }}>
-              <div style={{ color: G.muted, fontSize: 11 }}>29 juil – 19 août</div>
-              <div style={{ color: G.copper, fontSize: 11, fontWeight: 600 }}>2026 · 21 nuits</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Page content */}
-        <div style={{ paddingTop: 20, minHeight: "calc(100vh - 60px)" }}>
-          {page === "route" && <RouteView />}
-          {page === "etapes" && <DestinationsView />}
-          {page === "pratique" && <PratiqueView />}
-          {page === "budget" && <BudgetView />}
-        </div>
-
-        {/* Bottom nav */}
-        <div style={{
-          position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)",
-          width: "100%", maxWidth: 480,
-          background: `${G.surface}F0`, backdropFilter: "blur(20px)",
-          borderTop: `1px solid ${G.border}`, padding: "10px 0 16px",
-          display: "flex", zIndex: 200,
-        }}>
-          {navItems.map(n => (
-            <button key={n.key} onClick={() => setPage(n.key)} style={{
-              flex: 1, background: "none", border: "none", cursor: "pointer",
-              display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
-              transition: "all 0.2s",
-            }}>
-              <span style={{ fontSize: 20, filter: page === n.key ? "none" : "grayscale(60%)", transition: "filter 0.2s" }}>{n.icon}</span>
-              <span style={{
-                fontSize: 10, fontWeight: 600,
-                color: page === n.key ? G.gold : G.dim,
-                transition: "color 0.2s",
-              }}>{n.label}</span>
-              {page === n.key && <div style={{ width: 4, height: 4, borderRadius: "50%", background: G.gold }} />}
-            </button>
-          ))}
-        </div>
-      </div>
-    </>
-  );
+/* ── HEADER ── */
+@keyframes shimmer{0%{background-position:0% 50%}100%{background-position:200% 50%}}
+#header{
+  background:linear-gradient(135deg,#EDE9FE 0%,#DBEAFE 25%,#D1FAE5 50%,#FEF3C7 75%,#FCE7F3 100%);
+  background-size:300% 300%;animation:shimmer 8s ease infinite;
+  padding:12px 24px 0;border-bottom:1px solid rgba(0,0,0,.08);flex-shrink:0;
 }
+#header-row1{display:flex;align-items:center;gap:20px;padding-bottom:10px;border-bottom:1px solid rgba(0,0,0,.07)}
+.h-logo{font-family:'Playfair Display',serif;font-weight:800;font-size:21px;letter-spacing:-.5px;color:#111827;line-height:1}
+.h-sub{font-size:11px;color:#6B7280;margin-top:3px;letter-spacing:.3px}
+.h-stats{margin-left:auto;display:flex;gap:20px}
+.h-stat-v{font-family:'DM Mono',monospace;font-weight:500;font-size:19px;color:#111827;line-height:1;text-align:right}
+.h-stat-l{font-size:9px;color:#6B7280;text-transform:uppercase;letter-spacing:.7px;margin-top:2px;text-align:right}
+#toolbar{display:flex;align-items:center;gap:5px;padding:8px 0;flex-wrap:wrap}
+#search-wrap{position:relative;flex:0 0 240px}
+#si{position:absolute;left:9px;top:50%;transform:translateY(-50%);font-size:13px;color:#9CA3AF;pointer-events:none}
+#search{width:100%;background:rgba(255,255,255,.8);border:1px solid rgba(0,0,0,.1);border-radius:8px;padding:6px 28px;color:#111827;font-size:12px;font-family:'DM Sans',sans-serif}
+#search:focus{outline:none;border-color:rgba(0,0,0,.2)}
+#sclear{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#9CA3AF;font-size:14px;cursor:pointer;display:none}
+.fbtn{padding:4px 12px;border-radius:20px;font-size:11px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif;display:flex;align-items:center;gap:4px;border:1.5px solid;transition:all .13s}
+.dot{display:inline-block;border-radius:50%;flex-shrink:0;vertical-align:middle}
+
+/* ── MAIN SPLIT ── */
+#main{display:flex;flex:1;overflow:hidden}
+
+/* ── SIDEBAR ── */
+#sidebar{width:400px;flex-shrink:0;overflow-y:auto;background:#F7F6F3;border-right:1px solid #E5E7EB}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:#D1D5DB;border-radius:3px}
+#sidebar-content{padding:10px 12px 40px}
+
+/* ── MAP ── */
+#map{flex:1;z-index:0}
+.leaflet-popup-content-wrapper{border-radius:10px!important;padding:0!important;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,.15)!important;border:none!important}
+.leaflet-popup-content{margin:0!important;width:260px!important}
+.leaflet-popup-tip-container{margin-top:-1px}
+.lp-head{padding:12px 14px;display:flex;align-items:center;gap:8px}
+.lp-name{font-family:'Playfair Display',serif;font-weight:700;font-size:14px;color:#111827}
+.lp-price{font-family:'DM Mono',monospace;font-weight:500;font-size:13px;margin-left:auto}
+.lp-sub{font-size:10px;color:#9CA3AF;text-align:right;margin-top:1px}
+.lp-body{padding:8px 14px 12px;border-top:1px solid #F3F4F6}
+.lp-poi{display:flex;gap:7px;padding:3px 0;font-size:11.5px;color:#374151;align-items:flex-start}
+.lp-btn{display:block;width:calc(100% - 28px);margin:8px 14px 0;padding:7px;border-radius:7px;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:11.5px;font-weight:600;text-align:center}
+
+/* ── SECTEUR BLOCK ── */
+@keyframes pop{from{opacity:0;transform:scale(.97) translateY(-4px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.pop{animation:pop .18s cubic-bezier(.34,1.4,.64,1) both}
+.sb{margin-bottom:8px;border-radius:12px;overflow:hidden;border:1.5px solid rgba(0,0,0,.08);transition:box-shadow .2s,border-color .2s}
+.sb.open{box-shadow:0 4px 16px rgba(0,0,0,.1)}
+.sh{padding:13px 16px;cursor:pointer;display:flex;align-items:center;gap:11px;user-select:none;transition:background .15s}
+.s-accent{width:3px;border-radius:2px;flex-shrink:0;align-self:stretch}
+.s-name{font-family:'Playfair Display',serif;font-weight:700;font-size:14px;color:#111827}
+.s-zone{font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;padding:2px 7px;border-radius:20px}
+.s-desc{font-size:10.5px;color:#6B7280;margin-top:2px}
+.s-price{font-family:'DM Mono',monospace;font-weight:500;font-size:16px;line-height:1;text-align:right;flex-shrink:0}
+.s-range{font-size:10px;color:#9CA3AF;margin-top:1px;text-align:right}
+.s-badge{padding:3px 10px;border-radius:5px;font-size:10.5px;font-weight:600;flex-shrink:0;display:flex;align-items:center;gap:4px;border:1.5px solid}
+.chev{color:#D1D5DB;font-size:12px;transition:transform .2s;flex-shrink:0}
+
+/* sector stats */
+.ss{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid #F3F4F6}
+.ss-cell{padding:9px 12px;border-right:1px solid rgba(0,0,0,.05)}
+.ss-l{font-size:8.5px;color:#9CA3AF;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px}
+.ss-v{font-family:'DM Mono',monospace;font-weight:500;font-size:14px}
+.ss-sub{font-size:9px;color:#6B7280;margin-top:1px}
+
+/* city row */
+.cr{border-top:1px solid #F9FAFB;overflow:hidden}
+.ci{padding:9px 14px 9px 20px;display:flex;align-items:center;gap:8px;background:#fff;transition:background .12s}
+.ci.click{cursor:pointer}.ci.click:hover{background:rgba(0,0,0,.025)!important}
+.c-name{font-family:'Playfair Display',serif;font-weight:700;font-size:13px;color:#111827}
+.c-pop{font-size:9.5px;color:#9CA3AF}
+.c-poi{font-size:12px;cursor:default}
+.qpill{font-family:'DM Mono',monospace;font-size:8.5px;border-radius:3px;padding:1px 4px;font-weight:500}
+.c-price{font-family:'DM Mono',monospace;font-weight:500;font-size:13px;line-height:1;text-align:right;flex-shrink:0}
+.c-yield{font-size:9.5px;color:#9CA3AF;margin-top:2px;text-align:right}
+
+/* city detail */
+.cd{border-top:1px solid transparent}
+.cd-stats{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid rgba(0,0,0,.05)}
+.cd-sc{padding:8px 12px;border-right:1px solid rgba(0,0,0,.04)}
+.cd-l{font-size:8.5px;color:#9CA3AF;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px}
+.cd-v{font-family:'DM Mono',monospace;font-weight:500;font-size:13px}
+.cd-sub{font-size:8.5px;color:#6B7280;margin-top:1px}
+.cd-body{display:grid}
+.cd-pane{padding:10px 12px}
+.pane-t{font-size:8px;color:#9CA3AF;text-transform:uppercase;letter-spacing:.7px;margin-bottom:7px;font-weight:600}
+.pr{display:flex;gap:7px;padding:4px 0;border-bottom:1px solid rgba(0,0,0,.04);align-items:flex-start}
+.pr-ic{font-size:14px;line-height:1.4;flex-shrink:0}
+.pr-cat{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+.pr-txt{font-size:11px;color:#374151;line-height:1.5}
+.qr{display:flex;align-items:flex-start;gap:7px;padding:4px 0;border-bottom:1px solid rgba(0,0,0,.04)}
+.qd{width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-top:4px}
+.qn{font-size:11px;font-weight:500;color:#1F2937}
+.qno{font-size:9.5px;color:#9CA3AF;margin-top:1px}
+.qs{font-size:9px;font-weight:600;white-space:nowrap;flex-shrink:0}
+
+/* search results */
+#sr-wrap{display:none}
+#sr-wrap.vis{display:block}
+.sres{background:#fff;border-radius:10px;margin-bottom:5px;overflow:hidden;border-left:4px solid transparent;border:1.5px solid}
+.sres-h{padding:10px 14px;display:flex;align-items:center;gap:10px}
+.sr-name{font-family:'Playfair Display',serif;font-weight:700;font-size:14px}
+.sr-sect{font-size:10px;color:#9CA3AF;margin-left:7px}
+
+/* map zoom btn */
+.map-btn{position:absolute;z-index:1000;bottom:24px;right:12px;background:#fff;border:1px solid #E5E7EB;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:600;color:#374151;cursor:pointer;font-family:'DM Sans',sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+.map-btn:hover{background:#F9FAFB}
+
+/* highlighted marker animation */
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(99,102,241,.4)}70%{box-shadow:0 0 0 10px rgba(99,102,241,0)}100%{box-shadow:0 0 0 0 rgba(99,102,241,0)}}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div id="header">
+  <div id="header-row1">
+    <div>
+      <div class="h-logo">ImmoGuide <span style="font-family:'DM Sans',sans-serif;font-weight:400;font-size:13px;color:#6B7280">Arrondissement de Lille</span></div>
+      <div class="h-sub">Intelligence immobilière · MeilleursAgents · SeLoger · Observatoire des Loyers MEL · Données 2025</div>
+    </div>
+    <div class="h-stats">
+      <div><div class="h-stat-v">11</div><div class="h-stat-l">Secteurs</div></div>
+      <div><div class="h-stat-v">124</div><div class="h-stat-l">Communes</div></div>
+      <div><div class="h-stat-v">401</div><div class="h-stat-l">Quartiers</div></div>
+    </div>
+  </div>
+  <div id="toolbar">
+    <div id="search-wrap">
+      <span id="si">⌕</span>
+      <input id="search" type="text" placeholder="Commune ou quartier…">
+      <button id="sclear">×</button>
+    </div>
+    <button class="fbtn" data-f="all" style="background:#111827;color:#fff;border-color:#111827">Tous</button>
+    <button class="fbtn" data-f="S" style="background:#EDE9FE;color:#5B21B6;border-color:#C4B5FD"><span class="dot" style="width:6px;height:6px;background:#8B5CF6"></span>Premium</button>
+    <button class="fbtn" data-f="A" style="background:#DBEAFE;color:#1D4ED8;border-color:#93C5FD"><span class="dot" style="width:6px;height:6px;background:#3B82F6"></span>Recherché</button>
+    <button class="fbtn" data-f="B" style="background:#D1FAE5;color:#065F46;border-color:#6EE7B7"><span class="dot" style="width:6px;height:6px;background:#10B981"></span>Accessible</button>
+    <button class="fbtn" data-f="C" style="background:#FEF3C7;color:#92400E;border-color:#FCD34D"><span class="dot" style="width:6px;height:6px;background:#F59E0B"></span>Populaire</button>
+    <button class="fbtn" data-f="D" style="background:#F1F5F9;color:#475569;border-color:#CBD5E1"><span class="dot" style="width:6px;height:6px;background:#94A3B8"></span>Difficile</button>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+  <div id="sidebar">
+    <div id="sidebar-content">
+      <div id="sr-wrap"></div>
+      <div id="sect-list"></div>
+      <div style="text-align:center;font-size:9.5px;color:#9CA3AF;margin-top:16px;line-height:1.9">
+        Sources : MeilleursAgents · SeLoger · PAP · Observatoire des Loyers MEL 2025 · DVF DGFiP<br>
+        Prix = médiane transactions 2025 · Rendement brut indicatif · Net ≈ Brut − 2%
+      </div>
+    </div>
+  </div>
+  <div id="map"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+// ── PALETTE ────────────────────────────────────────────────────────────────
+const T={
+  S:{name:"Premium",   dot:"#8B5CF6",pastel:"#EDE9FE",border:"#C4B5FD",txt:"#5B21B6"},
+  A:{name:"Recherché", dot:"#3B82F6",pastel:"#DBEAFE",border:"#93C5FD",txt:"#1D4ED8"},
+  B:{name:"Accessible",dot:"#10B981",pastel:"#D1FAE5",border:"#6EE7B7",txt:"#065F46"},
+  C:{name:"Populaire", dot:"#F59E0B",pastel:"#FEF3C7",border:"#FCD34D",txt:"#92400E"},
+  D:{name:"Difficile", dot:"#94A3B8",pastel:"#F1F5F9",border:"#CBD5E1",txt:"#475569"},
+};
+const QC={g:"#10B981",o:"#F59E0B",r:"#EF4444"};
+const QL={g:"Recommandé",o:"Moyen",r:"À éviter"};
+const POIM={
+  school:{icon:"🎓",label:"Enseignement"},park:{icon:"🌳",label:"Nature & parcs"},
+  transport:{icon:"🚉",label:"Transport"},hospital:{icon:"🏥",label:"Santé"},
+  sport:{icon:"⚽",label:"Sport"},culture:{icon:"🎨",label:"Culture"},
+  commerce:{icon:"🛍️",label:"Commerce"},risk:{icon:"⚠️",label:"Vigilance"},
+  eco:{icon:"🏭",label:"Économie"},
+};
+const f=n=>Math.round(n).toLocaleString("fr-FR");
+const rt=(p,l)=>((l*12/p)*100).toFixed(1);
+const tier=p=>p>=3500?"S":p>=2800?"A":p>=2200?"B":p>=1600?"C":"D";
+const pop2s=n=>n>=1000?(n/1000).toFixed(n>=10000?0:1)+"k":"<1k";
+
+// ── DATA ────────────────────────────────────────────────────────────────────
+const SECTEURS=[
+{id:"C07",name:"Marcq / Tourcoing Sud",zone:"Nord de Lille",desc:"Triangle doré — le secteur le plus prisé de la métropole",
+ cities:[
+  {n:"Bondues",pop:9500,p:4010,l:13.0,lat:50.7003,lng:3.0842,
+   pois:[{t:"park",v:"Château de Bondues & domaine boisé"},{t:"school",v:"Collège Saint-Michel · École primaire réputée"},{t:"transport",v:"Bus MEL · A22 Belgique 10 min"}],
+   q:[{n:"Centre – Mairie",s:"g"},{n:"Les Hauts de Bondues",s:"g"},{n:"Résidentiel Est",s:"g"}]},
+  {n:"Marcq-en-Barœul",pop:40545,p:3850,l:13.2,lat:50.6717,lng:3.0853,
+   pois:[{t:"park",v:"Parc de la Mitterie · Berges de la Deûle"},{t:"school",v:"Lycée Pierre-Mauroy · Collèges privés et publics"},{t:"transport",v:"Bus MEL lignes 6, 14, 18 · Périphérique Nord 8 min"},{t:"commerce",v:"3 500 entreprises · Carrefour Market"},{t:"eco",v:"5e ville MEL · 4e pôle économique de la métropole"}],
+   q:[{n:"Centre – Mairie",s:"g"},{n:"Le Bas Marcq",s:"g"},{n:"La Pilaterie",s:"g"},{n:"Les Hauts de Marcq",s:"g"},{n:"Wambrechies – Deûle",s:"g"},{n:"Domaine de la Mitterie",s:"g"},{n:"Quartier Nord",s:"o"}]},
+  {n:"Mouvaux",pop:13200,p:3150,l:12.0,lat:50.7108,lng:3.1047,
+   pois:[{t:"park",v:"Jardins & bois communal"},{t:"school",v:"Groupe scolaire Victor Hugo · Collège privé Notre-Dame"},{t:"transport",v:"Bus MEL · Périphérique Nord 5 min"}],
+   q:[{n:"Centre – Mairie",s:"g"},{n:"Les Hauts de Mouvaux",s:"g"},{n:"Résidentiel Sud",s:"g"}]},
+]},
+{id:"C05",name:"Lambersart",zone:"Nord-Ouest de Lille",desc:"Communes résidentielles vertes ceinturant Lille",
+ cities:[
+  {n:"Wambrechies",pop:9900,p:3440,l:11.5,lat:50.6911,lng:3.0272,
+   pois:[{t:"park",v:"Berges de la Deûle — piste cyclable vers Lille"},{t:"culture",v:"Distillerie Claeyssens (XVIIIe) — patrimoine classé"},{t:"transport",v:"TER halte · Bus MEL"}],
+   q:[{n:"Centre – Mairie",s:"g"},{n:"Les Hauts",s:"g"},{n:"Bord de Deûle",s:"g"},{n:"La Prairie",s:"g"}]},
+  {n:"La Madeleine",pop:22500,p:3410,l:13.0,lat:50.6589,lng:3.0683,
+   pois:[{t:"transport",v:"Métro ligne 2 — Lille centre en 6 min"},{t:"commerce",v:"Cora Madeleine · Rue piétonne"},{t:"school",v:"Lycée La Madeleine · 3 collèges"},{t:"park",v:"Parc J.-B. Lebas · Coulée verte Lille"}],
+   q:[{n:"Centre – Mairie",s:"g"},{n:"Bas Madeleine",s:"g"},{n:"Les Prés",s:"g"},{n:"Quartier Nord",s:"g"},{n:"Saint-André",s:"g"}]},
+  {n:"Verlinghem",pop:4000,p:3370,l:11.5,lat:50.6967,lng:3.0014,pois:[{t:"park",v:"Village fleuri, champs et prairies"},{t:"transport",v:"Bus MEL · A25 10 min"}]},
+  {n:"Lambersart",pop:28200,p:3330,l:12.0,lat:50.6514,lng:3.0181,
+   pois:[{t:"park",v:"Parc du Château de Canteleu · Voie verte Deûle"},{t:"transport",v:"Bus MEL multiples · Périphérique Ouest 3 min"},{t:"commerce",v:"Zone commerciale Englos (IKEA, Auchan) à 5 min"}],
+   q:[{n:"Centre – Mairie",s:"g"},{n:"Canteleu",s:"g"},{n:"Le Marais",s:"g"},{n:"Les Hauts",s:"g"},{n:"Saint-Philibert",s:"g"},{n:"Chapelle Saint-Philibert",s:"o"}]},
+  {n:"Saint-André-lez-Lille",pop:11800,p:3150,l:11.0,lat:50.6714,lng:3.0181,pois:[{t:"park",v:"Berges de la Deûle"},{t:"transport",v:"Bus MEL · Périphérique 4 min"}],q:[{n:"Centre – Mairie",s:"g"},{n:"Les Hauts",s:"g"},{n:"Quartier Gare",s:"o"}]},
+  {n:"Lompret",pop:4400,p:3160,l:11.0,lat:50.6847,lng:2.9917,pois:[{t:"park",v:"Bocage préservé"},{t:"transport",v:"Bus MEL · Armentières 15 min"}]},
+  {n:"Marquette-lez-Lille",pop:10200,p:3130,l:11.0,lat:50.6761,lng:3.0367,pois:[{t:"transport",v:"TER halte Marquette (projet 2026) · Bus MEL"},{t:"park",v:"Berges Deûle à vélo"}]},
+  {n:"Quesnoy-sur-Deûle",pop:6900,p:2800,l:10.5,lat:50.7003,lng:3.0019,pois:[{t:"park",v:"Bord de Deûle · pêche et randonnée"},{t:"transport",v:"TER Lille–Armentières · gare centre-bourg"}]},
+]},
+{id:"C06",name:"Lille",zone:"Centre métropolitain",desc:"Capitale régionale — marché segmenté de 2 000 à 5 500 €/m²",
+ cities:[
+  {n:"Lille",pop:237000,p:3400,l:14.0,lat:50.6292,lng:3.0573,
+   pois:[{t:"transport",v:"Gares TGV Flandres & Europe · Métro L1+L2 · Tramway · 80 lignes bus"},{t:"school",v:"Université de Lille 70 000 étudiants · Sciences Po · EDHEC · Grandes écoles"},{t:"culture",v:"Palais des Beaux-Arts · Gare Saint-Sauveur · Zénith · Opéra"},{t:"park",v:"Citadelle 65 ha · Parc Matisse · Parc J.-B. Lebas"},{t:"hospital",v:"CHU de Lille — 1er hôpital du Nord"},{t:"commerce",v:"Euralille · Vieux-Lille · Grand'Place · Marché Wazemmes"},{t:"eco",v:"EuraTechnologies 1 200 entreprises · Eurasanté · 1er pôle du Nord"}],
+   q:[{n:"Vieux-Lille",s:"g",note:"4 800–5 500 €/m²"},{n:"Centre – Bourse",s:"g",note:"4 000–4 800 €/m²"},{n:"République",s:"g",note:"3 800–4 500 €/m²"},{n:"Vauban – Esquermes",s:"g",note:"3 600–4 400 €/m²"},{n:"Saint-Maurice Pellevoisin",s:"g",note:"3 200–3 800 €/m²"},{n:"Euralille – Gares",s:"g",note:"3 500–4 200 €/m²"},{n:"Wazemmes",s:"o",note:"2 800–3 500 €/m²"},{n:"Moulins",s:"o",note:"2 800–3 400 €/m²"},{n:"Fives",s:"o",note:"2 700–3 300 €/m²"},{n:"Hellemmes – Centre",s:"o",note:"2 500–3 000 €/m²"},{n:"Lomme – Centre",s:"o",note:"2 400–3 000 €/m²"},{n:"Marais de Lomme",s:"o",note:"2 300–2 800 €/m²"},{n:"Bois-Blancs",s:"r",note:"QPV"},{n:"Lille-Sud",s:"r",note:"QPV"},{n:"Porte de Valenciennes",s:"r",note:"QPV"}]},
+  {n:"Lezennes",pop:5000,p:2720,l:11.0,lat:50.6094,lng:3.1100,pois:[{t:"transport",v:"Métro L1 station Quatre-Cantons 5 min"}],q:[{n:"Centre",s:"g"},{n:"Les Hauts",s:"g"},{n:"La Plaine",s:"o"}]},
+  {n:"Santes",pop:5600,p:2700,l:9.5,lat:50.5889,lng:2.9583,pois:[{t:"park",v:"Village calme, prairies"},{t:"transport",v:"Bus MEL · A25 10 min"}],q:[{n:"Centre",s:"g"},{n:"Les Hauts",s:"g"},{n:"La Prairie",s:"g"},{n:"Le Marais",s:"o"}]},
+  {n:"Englos",pop:1350,p:2800,l:9.0,lat:50.6317,lng:2.9700,pois:[{t:"commerce",v:"Zone IKEA/Auchan — la plus grande du Nord"},{t:"transport",v:"A25 direct"}]},
+  {n:"Sequedin",pop:3900,p:2600,l:9.5,lat:50.6317,lng:3.0019,pois:[{t:"transport",v:"Bus MEL · Lomme/Lille Ouest"}]},
+  {n:"Mons-en-Barœul",pop:23000,p:2390,l:10.0,lat:50.6417,lng:3.1100,pois:[{t:"transport",v:"Bus MEL · Métro L1 à 5 min"},{t:"risk",v:"Faubourg de Roubaix & Oliveaux : QPV"}],q:[{n:"Centre – Mairie",s:"o"},{n:"Les Hauts Champs",s:"o"},{n:"Faubourg de Roubaix",s:"r"},{n:"Les Oliveaux",s:"r"}]},
+  {n:"Ronchin",pop:18700,p:2350,l:9.5,lat:50.5931,lng:3.0781,pois:[{t:"sport",v:"Stade Pierre-Mauroy 50 000 places à 3 min"},{t:"transport",v:"Bus MEL"}],q:[{n:"Centre – Mairie",s:"o"},{n:"Les Hauts de Ronchin",s:"g"},{n:"Quartier Nord",s:"o"}]},
+  {n:"Loos",pop:21400,p:2350,l:10.0,lat:50.6089,lng:3.0211,pois:[{t:"transport",v:"Bus MEL · Périphérique Sud 5 min"}],q:[{n:"Centre – Mairie",s:"g"},{n:"Faubourg de Lille",s:"o"},{n:"La Gare",s:"o"},{n:"Quartier Nord",s:"r"}]},
+  {n:"Hallennes-lez-Haubourdin",pop:4200,p:2400,l:9.0,lat:50.5917,lng:2.9983},
+  {n:"Beaucamps-Ligny",pop:3550,p:2500,l:8.5,lat:50.5767,lng:2.9783},
+  {n:"Ennetières-en-Weppes",pop:2500,p:2300,l:8.5,lat:50.5967,lng:2.9483},
+  {n:"Erquinghem-le-Sec",pop:1300,p:2500,l:8.5,lat:50.6167,lng:2.9283},
+  {n:"Escobecques",pop:1350,p:2400,l:8.5,lat:50.5817,lng:2.9283},
+]},
+{id:"C11",name:"Villeneuve-d'Ascq",zone:"Est de Lille",desc:"Ville universitaire moderne et villages résidentiels",
+ cities:[
+  {n:"Forest-sur-Marque",pop:5200,p:3100,l:11.0,lat:50.6267,lng:3.1917,pois:[{t:"park",v:"Bords de la Marque · prairies calmes"},{t:"transport",v:"Bus MEL · A23 5 min"}],q:[{n:"Centre-Bourg",s:"g"},{n:"Les Prés",s:"g"},{n:"La Marque",s:"g"}]},
+  {n:"Willems",pop:5400,p:3050,l:11.0,lat:50.6117,lng:3.2217,pois:[{t:"park",v:"Village calme · champs ouverts"},{t:"transport",v:"Bus MEL · A23"}],q:[{n:"Centre-Bourg",s:"g"},{n:"Les Champs",s:"g"}]},
+  {n:"Villeneuve-d'Ascq",pop:62000,p:2820,l:12.0,lat:50.6317,lng:3.1425,
+   pois:[{t:"transport",v:"Métro L1 · LEA tramway · Bus MEL"},{t:"school",v:"Université Lille campus 45 000 étudiants · Centrale · Polytech · ISEN"},{t:"culture",v:"LaM — musée d'art moderne"},{t:"park",v:"Parc du Héron 9 ha · Jardin botanique"},{t:"commerce",v:"V2 centre commercial · Val de Lys"}],
+   q:[{n:"ASCQ · Centre d'Ascq",s:"g",note:"3 200–3 800 €/m²"},{n:"FLERS · Centre de Flers",s:"g",note:"2 800–3 400 €/m²"},{n:"RÉSIDENCE · Château – Rollin",s:"g",note:"3 000–3 600 €/m²"},{n:"ANNAPPES · Pont de Bois",s:"g",note:"2 700–3 300 €/m²"},{n:"TRIOLO · Triolo",s:"o",note:"2 400–3 000 €/m²"},{n:"TRIOLO · La Cousinerie",s:"o",note:"2 300–2 900 €/m²"},{n:"BREUCQ · Breucq Est",s:"r",note:"1 800–2 400 €/m²"}]},
+  {n:"Lannoy",pop:1850,p:2400,l:9.5,lat:50.6725,lng:3.2219,pois:[{t:"culture",v:"Village historique médiéval, beffroi classé"}],q:[{n:"Centre-Bourg",s:"g"}]},
+]},
+{id:"C09",name:"Templeuve-en-Pévèle",zone:"Sud-Est",desc:"32 communes rurales — qualité de vie, bocage préservé",
+ cities:[
+  {n:"Sainghin-en-Mélantois",pop:3850,p:3373,l:11.0,lat:50.5781,lng:3.1228,pois:[{t:"park",v:"Bocage préservé · sentiers"},{t:"transport",v:"Bus MEL · A1 15 min"}],q:[{n:"Centre-Bourg",s:"g"},{n:"Les Prés",s:"g"},{n:"La Pévèle",s:"g"}]},
+  {n:"Baisieux",pop:6700,p:3100,l:10.5,lat:50.5914,lng:3.2353,pois:[{t:"transport",v:"A27 Belgique · frontière 5 min"},{t:"park",v:"Village résidentiel"}],q:[{n:"Centre",s:"g"},{n:"Les Hauts",s:"g"},{n:"La Pévèle",s:"g"},{n:"Les Prés",s:"g"}]},
+  {n:"Péronne-en-Mélantois",pop:2800,p:2900,l:9.5,lat:50.5653,lng:3.1547,pois:[{t:"park",v:"Perle peu connue de la Pévèle — fort potentiel"}]},
+  {n:"Chéreng",pop:4800,p:2900,l:9.5,lat:50.5847,lng:3.1947,pois:[{t:"park",v:"Calme, prairies"}],q:[{n:"Centre-Bourg",s:"g"},{n:"Les Hauts",s:"g"},{n:"La Plaine",s:"g"}]},
+  {n:"Templeuve-en-Pévèle",pop:6300,p:2900,l:10.0,lat:50.5564,lng:3.2078,pois:[{t:"park",v:"Parc communal · marché hebdomadaire"},{t:"transport",v:"Bus MEL · A23 10 min"}],q:[{n:"Centre",s:"g"},{n:"Les Hauts",s:"g"},{n:"La Pévèle",s:"g"},{n:"Le Marais",s:"o"}]},
+  {n:"Camphin-en-Pévèle",pop:3600,p:2850,l:9.5,lat:50.5417,lng:3.2383,pois:[{t:"park",v:"Pévèle, bocage typique"}],q:[{n:"Centre-Bourg",s:"g"},{n:"La Pévèle",s:"g"}]},
+  {n:"Tressin",pop:3550,p:2800,l:9.5,lat:50.5981,lng:3.2017},
+  {n:"Anstaing",pop:2100,p:2800,l:9.5,lat:50.5714,lng:3.1717},
+  {n:"Fretin",pop:4650,p:2800,l:9.5,lat:50.5617,lng:3.1425,pois:[{t:"transport",v:"Aéroport Lille-Lesquin 5 min · A1 directe"}],q:[{n:"Centre-Bourg",s:"g"},{n:"Aéroport",s:"o"}]},
+  {n:"Gruson",pop:1600,p:2700,l:9.0,lat:50.5814,lng:3.2217},
+  {n:"Bouvines",pop:1350,p:2700,l:9.0,lat:50.5781,lng:3.2083,pois:[{t:"culture",v:"Bataille de Bouvines 1214 — site historique international"}]},
+  {n:"Pont-à-Marcq",pop:4450,p:2700,l:9.5,lat:50.5431,lng:3.1883,pois:[{t:"park",v:"Bords de la Marque"},{t:"transport",v:"A23 8 min"}],q:[{n:"Centre",s:"g"},{n:"Les Hauts",s:"g"}]},
+  {n:"Cysoing",pop:4800,p:2700,l:10.0,lat:50.5328,lng:3.2139,pois:[{t:"culture",v:"Abbaye de Cysoing — patrimoine"}],q:[{n:"Centre",s:"g"},{n:"Les Hauts",s:"g"}]},
+  {n:"Mons-en-Pévèle",pop:5300,p:2700,l:9.0,lat:50.5181,lng:3.1847,pois:[{t:"transport",v:"A1 Paris–Lille 10 min"}],q:[{n:"Centre",s:"g"},{n:"Les Hauts",s:"g"}]},
+  {n:"Lesquin",pop:6600,p:2600,l:10.0,lat:50.5808,lng:3.1083,pois:[{t:"transport",v:"Aéroport Lille-Lesquin · A1/A23/A27 échangeur central"}],q:[{n:"Centre",s:"g"},{n:"Zone Aéroportuaire",s:"o"},{n:"La Plaine",s:"o"}]},
+  {n:"Cappelle-en-Pévèle",pop:2400,p:2600,l:9.0,lat:50.5381,lng:3.2383},
+  {n:"Genech",pop:2750,p:2600,l:8.5,lat:50.5231,lng:3.2383},
+  {n:"Mérignies",pop:3750,p:2600,l:8.5,lat:50.5081,lng:3.1847},
+  {n:"Attiches",pop:3700,p:2700,l:9.0,lat:50.5281,lng:3.1447},
+  {n:"Avelin",pop:3000,p:2600,l:9.0,lat:50.5081,lng:3.1447},
+  {n:"Tourmignies",pop:1900,p:2600,l:8.5,lat:50.5181,lng:3.2083},
+  {n:"Ennevelin",pop:2500,p:2500,l:8.5,lat:50.5381,lng:3.1747},
+  {n:"Louvil",pop:2700,p:2500,l:8.5,lat:50.5281,lng:3.2083},
+  {n:"Cobrieux",pop:2000,p:2500,l:8.5,lat:50.5531,lng:3.2383},
+  {n:"Bourghelles",pop:1700,p:2500,l:8.5,lat:50.5631,lng:3.2383},
+  {n:"Wannehain",pop:2350,p:2500,l:8.5,lat:50.5081,lng:3.2383},
+  {n:"Bachy",pop:1950,p:2500,l:8.5,lat:50.5031,lng:3.2083},
+  {n:"Bersée",pop:2150,p:2400,l:8.5,lat:50.4931,lng:3.1847},
+  {n:"Mouchin",pop:2400,p:2400,l:8.5,lat:50.5031,lng:3.2383},
+  {n:"La Neuville",pop:1200,p:2400,l:8.0,lat:50.5131,lng:3.1647},
+  {n:"Moncheaux",pop:2000,p:2300,l:8.0,lat:50.4831,lng:3.1647},
+  {n:"Thumeries",pop:4000,p:2300,l:8.5,lat:50.5031,lng:3.0783,pois:[{t:"eco",v:"Sucrerie de Thumeries — bassin d'emploi historique"}]},
+]},
+{id:"C03",name:"Croix",zone:"Est (Roubaix)",desc:"Communes résidentielles verdoyantes, sud-est de Roubaix",
+ cities:[
+  {n:"Croix",pop:21500,p:2600,l:11.0,lat:50.6781,lng:3.1619,
+   pois:[{t:"park",v:"Parc Barbieux 34 ha en limite — effet-prix +15%"},{t:"transport",v:"Tramway T · Bus MEL"},{t:"school",v:"EDHEC Business School (campus) à 5 min"},{t:"commerce",v:"L'Usine outlet mode à 10 min"}],
+   q:[{n:"Centre – Mairie",s:"g"},{n:"Grand Croix",s:"g"},{n:"Les Hauts de Croix",s:"g"},{n:"Cottignies",s:"g"},{n:"Sainte-Barbe",s:"o"},{n:"La Prairie",s:"o"}]},
+  {n:"Hem",pop:22000,p:2690,l:10.5,lat:50.6617,lng:3.1883,
+   pois:[{t:"park",v:"Parc de la Grenouillère · espaces verts"},{t:"transport",v:"Bus MEL · A22 Belgique"},{t:"risk",v:"Quartier Croix-Rouge : QPV, à éviter"}],
+   q:[{n:"Centre – Mairie",s:"g"},{n:"Pré Madame",s:"g"},{n:"Les Hauts",s:"g"},{n:"La Croix Rouge",s:"r"},{n:"Quartier Nord",s:"o"}]},
+  {n:"Toufflers",pop:2850,p:2600,l:9.5,lat:50.6617,lng:3.2217,pois:[{t:"park",v:"Village calme · frontière belge 10 min"}],q:[{n:"Centre-Bourg",s:"g"}]},
+  {n:"Sailly-lez-Lannoy",pop:2400,p:2500,l:9.5,lat:50.6717,lng:3.2283,q:[{n:"Centre-Bourg",s:"g"}]},
+  {n:"Lys-lez-Lannoy",pop:13500,p:2300,l:9.5,lat:50.6783,lng:3.2183,pois:[{t:"transport",v:"Bus MEL · Roubaix 10 min"},{t:"eco",v:"Requalification centre-ville PNRU en cours"}],q:[{n:"Centre",s:"g"},{n:"Les Hauts de Lys",s:"g"},{n:"Pont Rouge",s:"o"},{n:"Quartier Ouest",s:"o"}]},
+  {n:"Lannoy",pop:1850,p:2400,l:9.5,lat:50.6725,lng:3.2019,pois:[{t:"culture",v:"Beffroi classé, village médiéval"}],q:[{n:"Centre-Bourg",s:"g"}]},
+]},
+{id:"C04",name:"Faches-Thumesnil",zone:"Sud de Lille",desc:"Première couronne sud — bonne desserte TER, rendements solides",
+ cities:[
+  {n:"Gondecourt",pop:5350,p:2700,l:9.5,lat:50.5617,lng:3.0083,pois:[{t:"transport",v:"TER Lille–Douai · Bus MEL"},{t:"park",v:"Village pavillonnaire calme"}],q:[{n:"Centre",s:"g"},{n:"Les Hauts",s:"g"}]},
+  {n:"Emmerin",pop:3850,p:2700,l:9.5,lat:50.5917,lng:3.0283,pois:[{t:"park",v:"Commune verdoyante"},{t:"transport",v:"Bus MEL · Périphérique Sud 5 min"}],q:[{n:"Centre-Bourg",s:"g"},{n:"Les Hauts",s:"g"}]},
+  {n:"Templemars",pop:3800,p:2700,l:9.0,lat:50.5567,lng:3.0683,pois:[{t:"park",v:"Village calme"},{t:"transport",v:"A1 8 min"}],q:[{n:"Centre-Bourg",s:"g"},{n:"Les Hauts",s:"g"}]},
+  {n:"Faches-Thumesnil",pop:18500,p:2585,l:10.0,lat:50.5967,lng:3.0917,
+   pois:[{t:"transport",v:"TER Lille–Douai · Bus MEL · Métro M1 à 10 min"},{t:"sport",v:"Stade Pierre-Mauroy (Decathlon Arena) à 3 min"}],
+   q:[{n:"Faches-Centre",s:"g"},{n:"Thumesnil-Centre",s:"g"},{n:"Les Flambourges",s:"g"},{n:"Le Beau Marais",s:"g"},{n:"Les Prés",s:"o"},{n:"Quartier Ouest",s:"o"}]},
+  {n:"Houplin-Ancoisne",pop:3900,p:2600,l:9.0,lat:50.5617,lng:3.0483,q:[{n:"Houplin",s:"g"},{n:"Ancoisne",s:"g"}]},
+  {n:"Noyelles-lès-Seclin",pop:4150,p:2500,l:9.0,lat:50.5467,lng:3.0583,q:[{n:"Centre-Bourg",s:"g"},{n:"Les Hauts",s:"g"}]},
+  {n:"Seclin",pop:12400,p:2500,l:9.5,lat:50.5503,lng:3.0353,pois:[{t:"transport",v:"TER Lille–Douai · A1 Paris 5 min"},{t:"risk",v:"Quartier La Marlière : difficultés sociales"}],q:[{n:"Centre – Mairie",s:"g"},{n:"Gare",s:"o"},{n:"Les Hauts de Seclin",s:"g"},{n:"La Marlière",s:"r"}]},
+  {n:"Wattignies",pop:14400,p:2460,l:9.5,lat:50.5803,lng:3.0553,pois:[{t:"transport",v:"Bus MEL · Périphérique Sud 5 min"},{t:"sport",v:"Stade Pierre-Mauroy 8 min"}],q:[{n:"Centre – Mairie",s:"g"},{n:"Les Hauts",s:"g"},{n:"Quartier Nord",s:"o"},{n:"Faubourg de Lille",s:"o"}]},
+  {n:"Haubourdin",pop:14600,p:2400,l:9.0,lat:50.6053,lng:3.0053,pois:[{t:"transport",v:"Bus MEL · Périphérique Ouest 8 min"},{t:"risk",v:"Quartier La Becque : zone sensible"}],q:[{n:"Centre – Mairie",s:"g"},{n:"Les Canteleux",s:"g"},{n:"La Becque",s:"r"}]},
+  {n:"Vendeville",pop:2450,p:2500,l:9.0,lat:50.5667,lng:3.1083},
+  {n:"Herrin",pop:2300,p:2300,l:8.5,lat:50.5467,lng:3.0083},
+  {n:"Chemy",pop:1650,p:2200,l:8.5,lat:50.5367,lng:3.0283},
+]},
+{id:"C02",name:"Armentières",zone:"Nord-Ouest",desc:"Vallée de la Lys — hausse continue, TER Lille direct 25 min",
+ cities:[
+  {n:"Capinghem",pop:2600,p:2700,l:10.0,lat:50.6317,lng:3.0019,pois:[{t:"park",v:"Lisière de Lille"},{t:"transport",v:"Périphérique Ouest direct"}],q:[{n:"Centre-Bourg",s:"g"}]},
+  {n:"Prémesques",pop:3500,p:2600,l:9.0,lat:50.6467,lng:2.9719,pois:[{t:"park",v:"Village entre Lille et Armentières"},{t:"transport",v:"A25 10 min"}],q:[{n:"Centre-Bourg",s:"g"},{n:"La Campagne",s:"g"}]},
+  {n:"Frelinghien",pop:3600,p:2500,l:9.0,lat:50.6717,lng:2.9419,pois:[{t:"park",v:"Bord de Lys — paysage flamand"},{t:"transport",v:"TER Armentières 5 min"}],q:[{n:"Centre-Bourg",s:"g"},{n:"Bord de Lys",s:"g"}]},
+  {n:"Pérenchies",pop:7700,p:2400,l:9.5,lat:50.6617,lng:2.9719,pois:[{t:"transport",v:"TER Lille–Armentières halte · Bus MEL"}],q:[{n:"Centre",s:"g"},{n:"Les Hauts",s:"g"},{n:"La Prairie",s:"g"}]},
+  {n:"Deûlémont",pop:2200,p:2400,l:8.5,lat:50.7017,lng:2.9219,pois:[{t:"park",v:"Bord de Lys · frontière belge 2 km"}],q:[{n:"Centre-Bourg",s:"g"}]},
+  {n:"La Chapelle-d'Armentières",pop:6500,p:2200,l:9.0,lat:50.6917,lng:2.8819,pois:[{t:"transport",v:"TER · Bus MEL"}],q:[{n:"Centre",s:"g"},{n:"La Chapelle-Nord",s:"g"}]},
+  {n:"Erquinghem-Lys",pop:5300,p:2200,l:9.0,lat:50.7067,lng:2.8819,pois:[{t:"park",v:"Bords de la Lys · prairies"}],q:[{n:"Centre",s:"g"},{n:"La Lys",s:"g"}]},
+  {n:"Bois-Grenier",pop:2100,p:2200,l:8.5,lat:50.6867,lng:2.8819,q:[{n:"Centre-Bourg",s:"g"}]},
+  {n:"Armentières",pop:25500,p:2100,l:9.0,lat:50.6903,lng:2.8803,
+   pois:[{t:"transport",v:"TER Lille direct 25 min · Bus MEL · A25 5 min"},{t:"culture",v:"Hôtel de Ville classé · Théâtre municipal"},{t:"park",v:"Berges de la Lys aménagées · Parc du Bizet"},{t:"eco",v:"PNRU centre-ville en cours — renouveau attendu"}],
+   q:[{n:"Bizet – Pont Rouge",s:"g",note:"Calme"},{n:"Les Prés – Bas Prés",s:"g",note:"Bord de Lys"},{n:"La Lys – Nieppe",s:"g",note:"Calme"},{n:"Centre – Hôtel de Ville",s:"o",note:"Mixte"},{n:"Faubourg de Lille",s:"o",note:"Populaire"},{n:"Zone Industrielle",s:"r",note:"À éviter"}]},
+  {n:"Houplines",pop:7900,p:1900,l:8.5,lat:50.6983,lng:2.8903,pois:[{t:"park",v:"Bords de Lys"},{t:"transport",v:"TER · Bus MEL"}],q:[{n:"Centre – Mairie",s:"o"},{n:"Les Prés",s:"g"},{n:"Bord de Lys",s:"g"}]},
+  {n:"Warneton",pop:1050,p:2000,l:8.0,lat:50.7317,lng:2.8803,pois:[{t:"park",v:"Village frontalier sur la Lys"}]},
+]},
+{id:"C01",name:"Annœullin",zone:"Sud-Ouest",desc:"24 communes rurales — calme, nature, prix accessibles",
+ cities:[
+  {n:"Phalempin",pop:4850,p:2600,l:9.5,lat:50.5217,lng:3.0083,pois:[{t:"park",v:"Forêt de Phalempin 1 000 ha — la + grande forêt du Nord !"},{t:"transport",v:"A1 10 min"}],q:[{n:"Centre",s:"g"},{n:"Les Quatre Vents",s:"g"}]},
+  {n:"Camphin-en-Carembault",pop:3200,p:2500,l:9.0,lat:50.5317,lng:3.0383,pois:[{t:"park",v:"Bocage calme"}]},
+  {n:"Wavrin",pop:7700,p:2500,l:9.5,lat:50.5867,lng:2.9583,pois:[{t:"transport",v:"TER Lille–Armentières halte"},{t:"park",v:"Marais de la Deûle"}],q:[{n:"Centre",s:"g"},{n:"Les Fontenettes",s:"g"},{n:"Le Marais",s:"g"}]},
+  {n:"Provin",pop:4400,p:2400,l:9.0,lat:50.5267,lng:2.9883},
+  {n:"Sainghin-en-Weppes",pop:5400,p:2400,l:9.0,lat:50.5767,lng:2.9383,pois:[{t:"park",v:"Bocage des Weppes"},{t:"transport",v:"A25 10 min"}]},
+  {n:"Fromelles",pop:1500,p:2400,l:8.5,lat:50.6217,lng:2.8583,pois:[{t:"culture",v:"Mémorial de Fromelles (1ère GM) — site international"}]},
+  {n:"Annœullin",pop:10850,p:2300,l:9.0,lat:50.5317,lng:2.9483,pois:[{t:"transport",v:"Bus MEL · A1 et A25 proches"}],q:[{n:"Nord",s:"g"},{n:"Nord-Ouest",s:"g"},{n:"Sud-Est",s:"o"}]},
+  {n:"Bauvin",pop:5050,p:2200,l:8.5,lat:50.5267,lng:2.9183,q:[{n:"Centre",s:"g"},{n:"Le Marais",s:"o"}]},
+  {n:"La Bassée",pop:6450,p:2100,l:8.5,lat:50.5317,lng:2.8083,pois:[{t:"transport",v:"TER halte · Canal de la Deûle"},{t:"park",v:"Berges du canal"}],q:[{n:"Centre – Gare",s:"g"},{n:"Zone Industrielle",s:"r"}]},
+  {n:"Ostricourt",pop:5400,p:1900,l:8.0,lat:50.4767,lng:3.0183,pois:[{t:"risk",v:"Commune post-minière en déclin — vacance locative élevée"}]},
+  {n:"Salomé",pop:2200,p:2300,l:8.5,lat:50.5367,lng:2.8483},
+  {n:"Allennes-les-Marais",pop:3550,p:2300,l:8.5,lat:50.5617,lng:2.9183,pois:[{t:"park",v:"Étang et marais — nature préservée"}]},
+  {n:"Don",pop:3600,p:2300,l:8.5,lat:50.5317,lng:2.8783},
+  {n:"Carnin",pop:3450,p:2300,l:8.5,lat:50.5217,lng:2.9083},
+  {n:"Wahagnies",pop:3200,p:2300,l:8.5,lat:50.5067,lng:3.0483},
+  {n:"Marquillies",pop:2600,p:2200,l:8.5,lat:50.5617,lng:2.8783},
+  {n:"Hantay",pop:1400,p:2200,l:8.0,lat:50.5567,lng:2.8483},
+  {n:"Herlies",pop:1800,p:2200,l:8.0,lat:50.5817,lng:2.8583},
+  {n:"Illies",pop:1200,p:2200,l:8.0,lat:50.5817,lng:2.8383},
+  {n:"Le Maisnil",pop:1100,p:2300,l:8.0,lat:50.5917,lng:2.8183},
+  {n:"Fournes-en-Weppes",pop:4050,p:2200,l:8.5,lat:50.5817,lng:2.8883,pois:[{t:"park",v:"Bocage des Weppes"}]},
+  {n:"Aubers",pop:1800,p:2100,l:8.0,lat:50.6017,lng:2.8383},
+  {n:"Radinghem-en-Weppes",pop:1000,p:2000,l:7.5,lat:50.5617,lng:2.8183},
+  {n:"Wicres",pop:1000,p:2000,l:7.5,lat:50.5717,lng:2.8183},
+]},
+{id:"C10",name:"Tourcoing",zone:"Nord frontalier",desc:"Frontière franco-belge — opportunités autour d'une ville contrastée",
+ cities:[
+  {n:"Neuville-en-Ferrain",pop:10900,p:2608,l:10.0,lat:50.7517,lng:3.1817,pois:[{t:"transport",v:"A22 Belgique 5 min · Tramway T 10 min"},{t:"eco",v:"Frontaliers belges — demande locative soutenue"}],q:[{n:"Centre – Mairie",s:"g"},{n:"Les Hauts",s:"g"},{n:"Quartier Gare",s:"o"}]},
+  {n:"Linselles",pop:8200,p:2500,l:9.5,lat:50.7467,lng:3.1419,pois:[{t:"park",v:"Village calme, pavillonnaire"},{t:"transport",v:"A22 8 min"}],q:[{n:"Centre-Bourg",s:"g"},{n:"Les Hauts",s:"g"}]},
+  {n:"Halluin",pop:20400,p:2313,l:9.0,lat:50.7814,lng:3.1264,pois:[{t:"transport",v:"Frontière belge directe · Courtrai 15 min"},{t:"eco",v:"Échanges frontaliers franco-belges"}],q:[{n:"Centre – Mairie",s:"o"},{n:"Les Hauts",s:"g"},{n:"Bord de Lys",s:"g"},{n:"La Basse Ville",s:"r"}]},
+  {n:"Bousbecque",pop:4800,p:2320,l:9.0,lat:50.7617,lng:3.1617,pois:[{t:"park",v:"Bords de la Lys"},{t:"transport",v:"Frontière belge 5 min"}],q:[{n:"Centre-Bourg",s:"g"},{n:"Les Prés de la Lys",s:"g"}]},
+  {n:"Wervicq-Sud",pop:5300,p:2200,l:8.5,lat:50.7617,lng:3.1017,pois:[{t:"park",v:"Bords de la Lys"},{t:"transport",v:"Frontière Belgique directe"}],q:[{n:"Centre-Bourg",s:"g"},{n:"Bord de Lys",s:"g"}]},
+  {n:"Comines",pop:11900,p:2100,l:8.5,lat:50.7617,lng:3.0017,pois:[{t:"park",v:"Bords de la Lys — ville frontière"},{t:"transport",v:"Belgique directe"}],q:[{n:"Centre – Mairie",s:"g"},{n:"Quartier Gare",s:"o"}]},
+  {n:"Tourcoing",pop:99000,p:1760,l:9.0,lat:50.7239,lng:3.1619,
+   pois:[{t:"transport",v:"Tramway T Roubaix–Lille · Bus MEL nombreux · A22"},{t:"school",v:"ESAAT · IUT · Lycées"},{t:"culture",v:"MUba Eugène Leroy · École supérieure d'arts"},{t:"eco",v:"EuraTechnologies antenne · Zone Union — reconversion textile"},{t:"risk",v:"QPV : Virolois, Croix-Rouge, Bourgogne, Belencontre — ANRU 300 M€"}],
+   q:[{n:"Brun Pain",s:"g",note:"Résidentiel calme"},{n:"Les Francs",s:"g",note:"Agréable"},{n:"Flocon",s:"g",note:"Parc, lycées, dynamique"},{n:"Union",s:"o",note:"En transformation"},{n:"Gare",s:"o",note:"Mixte"},{n:"Centre – Hôtel de Ville",s:"r",note:"Zone sensible"},{n:"Belencontre",s:"r",note:"QPV"},{n:"La Bourgogne",s:"r",note:"ZUS"},{n:"Virolois",s:"r",note:"QPV – ANRU"},{n:"Croix-Rouge",s:"r",note:"QPV"}]},
+]},
+{id:"C08",name:"Roubaix",zone:"Est",desc:"Marché très contrasté — de Wasquehal premium au centre difficile",
+ cities:[
+  {n:"Wasquehal",pop:20500,p:3020,l:11.0,lat:50.6742,lng:3.1253,
+   pois:[{t:"transport",v:"Tramway T + Bus MEL · Périphérique Est 5 min"},{t:"park",v:"Espaces verts bien entretenus"},{t:"school",v:"Collèges et lycées réputés"}],
+   q:[{n:"Centre – Mairie",s:"g"},{n:"Les Prés",s:"g"},{n:"Quartier Nord",s:"g"},{n:"Résidentiel Est",s:"g"}]},
+  {n:"Leers",pop:9900,p:2420,l:10.0,lat:50.6683,lng:3.2353,pois:[{t:"park",v:"Village résidentiel calme — peu connu, bon potentiel"},{t:"transport",v:"Bus MEL · frontière belge 5 min"}],q:[{n:"Centre – Mairie",s:"g"},{n:"Les Hauts de Leers",s:"g"},{n:"Quartier Résidentiel",s:"g"}]},
+  {n:"Wattrelos",pop:43000,p:1915,l:9.0,lat:50.7067,lng:3.2017,
+   pois:[{t:"transport",v:"Bus MEL · Tourcoing 10 min"},{t:"risk",v:"Mont-à-Leux et Quartier Nord : zones difficiles"}],
+   q:[{n:"Le Laboureur",s:"g",note:"Résidentiel calme"},{n:"Beaulieu",s:"g",note:"Correct"},{n:"Centre – Mairie",s:"o",note:"Mixte"},{n:"Mont-à-Leux",s:"r",note:"Zone difficile"},{n:"Quartier Nord",s:"r",note:"Zone sensible"}]},
+  {n:"Roubaix",pop:97000,p:1650,l:9.0,lat:50.6942,lng:3.1746,
+   pois:[{t:"transport",v:"Tramway T — Lille 30 min · Gare TER · Bus MEL"},{t:"school",v:"EDHEC top 15 Europe · ENSAIT textile · ISEN"},{t:"culture",v:"La Piscine — musée art & industrie (l'un des + beaux de France) · L'Usine outlet"},{t:"park",v:"Parc Barbieux 34 ha — seul poumon vert · Parc de la Victoire"},{t:"eco",v:"Candidature Capitale Européenne de la Culture 2028"},{t:"risk",v:"QPV centre, Alma, Moulin, Gare — à éviter"}],
+   q:[{n:"Barbieux – Vauban",s:"g",note:"TOP · 2 200–2 800 €/m²"},{n:"Pile",s:"g",note:"Village dans la ville · 1 100–1 500 €/m²"},{n:"Cul-de-Four",s:"g",note:"Calme · 1 400–1 800 €/m²"},{n:"Trois Ponts – E. Anseele",s:"g",note:"Rénové · 1 600–2 000 €/m²"},{n:"Le Hamel",s:"g",note:"Correct"},{n:"Bourseaux",s:"g",note:"Calme"},{n:"Épeule",s:"o",note:"1 300–1 700 €/m²"},{n:"Sainte-Élisabeth",s:"o",note:"Mixte"},{n:"Centre – Hôtel de Ville",s:"r",note:"Zone tendue"},{n:"Gare",s:"r",note:"QPV"},{n:"Alma",s:"r",note:"QPV · ANRU 2023"},{n:"Moulin",s:"r",note:"QPV"},{n:"Croix-Rouge (Rbx)",s:"r",note:"Grand ensemble"}]},
+]},
+];
+
+// ── HELPERS ────────────────────────────────────────────────────────────────
+const ap=s=>{const pp=s.cities.map(c=>c.p);return Math.round(pp.reduce((a,v)=>a+v,0)/Math.max(pp.length,1));};
+const al=s=>(s.cities.reduce((a,c)=>a+c.l,0)/s.cities.length).toFixed(1);
+function dotEl(color,size=8,glow=false){
+  return `<span class="dot" style="width:${size}px;height:${size}px;background:${color};${glow?`box-shadow:0 0 0 2px ${color}22,0 0 5px ${color}66`:""}"></span>`;
+}
+function priceTag(p,l,small=false){
+  const t=T[tier(p)];const fs=small?11:13;const ys=small?8.5:9.5;
+  return `<div style="text-align:right;flex-shrink:0">
+    <div class="c-price" style="font-size:${fs}px;color:${t.dot}">${f(p)} <span style="font-size:9px;color:#9CA3AF">€/m²</span></div>
+    <div class="c-yield" style="font-size:${ys}px">loyer ${l} € · ${rt(p,l)}% brut</div>
+  </div>`;
+}
+
+// ── STATE ──────────────────────────────────────────────────────────────────
+let curFilter="all",openSect=null,openCity=null,markers={};
+
+// ── MAP SETUP ─────────────────────────────────────────────────────────────
+const map=L.map("map",{center:[50.633,3.058],zoom:11,zoomControl:true});
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{
+  attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  maxZoom:18
+}).addTo(map);
+
+function makeIcon(color,size=10){
+  return L.divIcon({
+    className:"",
+    html:`<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 1px 6px rgba(0,0,0,.3)"></div>`,
+    iconSize:[size,size],iconAnchor:[size/2,size/2],
+  });
+}
+function makePulseIcon(color){
+  return L.divIcon({
+    className:"",
+    html:`<div style="width:16px;height:16px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 0 0 4px ${color}44,0 1px 8px rgba(0,0,0,.4)"></div>`,
+    iconSize:[16,16],iconAnchor:[8,8],
+  });
+}
+
+function buildPopup(city,sect){
+  const t=T[tier(city.p)];
+  const hasPoi=city.pois&&city.pois.length>0;
+  const cityKey=`${sect.id}||${city.n}`;
+  return `
+  <div style="background:#fff;border-radius:10px;overflow:hidden;min-width:240px">
+    <div class="lp-head" style="background:${t.pastel}">
+      ${dotEl(t.dot,8,true)}
+      <div style="flex:1">
+        <div class="lp-name">${city.n}</div>
+        <div style="font-size:9px;color:${t.txt};text-transform:uppercase;letter-spacing:.4px;margin-top:1px">${sect.name}</div>
+      </div>
+      <div>
+        <div style="font-family:'DM Mono',monospace;font-weight:500;font-size:13px;color:${t.dot};text-align:right">${f(city.p)} <span style="font-size:9px;color:#9CA3AF">€/m²</span></div>
+        <div style="font-size:9px;color:#9CA3AF;text-align:right">${rt(city.p,city.l)}% brut · loyer ${city.l} €</div>
+      </div>
+    </div>
+    ${hasPoi?`<div class="lp-body">
+      ${city.pois.slice(0,3).map(poi=>{const m=POIM[poi.t]||{icon:"📍"};
+        return `<div class="lp-poi"><span style="font-size:13px;flex-shrink:0">${m.icon}</span><span style="font-size:11px;color:#374151;line-height:1.4">${poi.v}</span></div>`;
+      }).join("")}
+    </div>`:""}
+    <button class="lp-btn" style="background:${t.pastel};color:${t.txt};border:1px solid ${t.border};margin-bottom:10px"
+      onclick="focusCityFromMap('${cityKey.replace(/'/g,"\\'")}')">
+      Voir le détail dans le guide →
+    </button>
+  </div>`;
+}
+
+function initMarkers(){
+  // clear
+  Object.values(markers).forEach(m=>map.removeLayer(m));
+  markers={};
+  SECTEURS.forEach(sect=>{
+    sect.cities.forEach(city=>{
+      if(!city.lat||!city.lng) return;
+      const t=T[tier(city.p)];
+      const key=`${sect.id}||${city.n}`;
+      const visible=(curFilter==="all"||tier(city.p)===curFilter);
+      const sz=city.pop>50000?14:city.pop>10000?12:10;
+      const m=L.marker([city.lat,city.lng],{icon:makeIcon(t.dot,sz)});
+      m.bindPopup(buildPopup(city,sect),{maxWidth:280,className:""});
+      m.on("click",()=>{
+        // dim all, highlight this
+        Object.values(markers).forEach(mk=>mk._immoActive=false);
+        m._immoActive=true;
+      });
+      if(visible) m.addTo(map);
+      markers[key]=m;
+    });
+  });
+}
+initMarkers();
+
+// focus city from map popup btn
+window.focusCityFromMap=function(key){
+  const [sectId,cityName]=key.split("||");
+  openSect=sectId;
+  openCity=`city-${sectId}-${cityName.replace(/\s/g,"-")}`;
+  renderAll();
+  setTimeout(()=>{
+    const el=document.getElementById(openCity+"-wrap");
+    if(el) el.scrollIntoView({behavior:"smooth",block:"center"});
+  },150);
+};
+
+// ── SIDEBAR RENDER ────────────────────────────────────────────────────────
+function renderDetail(city,sectId){
+  const t=T[tier(city.p)];
+  const ren=rt(city.p,city.l);
+  const net=(parseFloat(ren)-2).toFixed(1);
+  const hasP=city.pois&&city.pois.length>0;
+  const hasQ=city.q&&city.q.length>0;
+  const cols=hasP&&hasQ?"1fr 1fr":"1fr";
+  return `
+  <div style="background:${t.pastel}55">
+    <div class="cd-stats">
+      ${[{l:"Prix /m²",v:`${f(city.p)} €`,c:t.dot},{l:"Achat 80 m²",v:`≈${f(Math.round(city.p*80/1000))}k€`},{l:"Achat 100 m²",v:`≈${f(Math.round(city.p*100/1000))}k€`},{l:"Rendement",v:`${ren}%`,c:"#10B981",sub:`net ≈ ${net}%`}]
+      .map(x=>`<div class="cd-sc"><div class="cd-l">${x.l}</div><div class="cd-v" style="color:${x.c||"#111827"}">${x.v}</div>${x.sub?`<div class="cd-sub">${x.sub}</div>`:""}</div>`).join("")}
+    </div>
+    <div class="cd-body" style="grid-template-columns:${cols}">
+      ${hasP?`<div class="cd-pane" style="${hasQ?"border-right:1px solid rgba(0,0,0,.05)":""}">
+        <div class="pane-t">Points clés · Infrastructures</div>
+        ${city.pois.map(poi=>{const m=POIM[poi.t]||{icon:"📍",label:"Info"};
+          return `<div class="pr"><span class="pr-ic">${m.icon}</span><div><span class="pr-cat" style="color:${t.txt}">${m.label}&nbsp;</span><span class="pr-txt">${poi.v}</span></div></div>`;
+        }).join("")}
+      </div>`:""}
+      ${hasQ?`<div class="cd-pane">
+        <div class="pane-t">Quartiers IRIS · Analyse</div>
+        ${city.q.map(qt=>`<div class="qr">
+          <div class="qd" style="background:${QC[qt.s]};box-shadow:0 0 4px ${QC[qt.s]}88"></div>
+          <div style="flex:1"><div class="qn">${qt.n}</div>${qt.note?`<div class="qno">${qt.note}</div>`:""}</div>
+          <div class="qs" style="color:${QC[qt.s]}">${QL[qt.s]}</div>
+        </div>`).join("")}
+      </div>`:""}
+    </div>
+  </div>`;
+}
+
+function renderCity(city,sect){
+  const t=T[tier(city.p)];
+  const hasD=(city.q?.length||0)+(city.pois?.length||0)>0;
+  const cid=`city-${sect.id}-${city.n.replace(/\s/g,"-")}`;
+  const isOpen=openCity===cid;
+  const good=city.q?.filter(q=>q.s==="g").length||0;
+  const avg =city.q?.filter(q=>q.s==="o").length||0;
+  const bad =city.q?.filter(q=>q.s==="r").length||0;
+  const pills=[
+    good?`<span class="qpill" style="background:#D1FAE5;color:#065F46">✓${good}</span>`:"",
+    avg ?`<span class="qpill" style="background:#FEF3C7;color:#92400E">~${avg}</span>`:"",
+    bad ?`<span class="qpill" style="background:#FEE2E2;color:#991B1B">✗${bad}</span>`:"",
+  ].join("");
+  return `
+  <div class="cr" id="${cid}-wrap">
+    <div class="ci${hasD?" click":""}" ${hasD?`onclick="toggleCity('${cid}','${sect.id}')"`:""}
+      style="background:${isOpen?t.pastel+"88":"#fff"}">
+      ${dotEl(t.dot,7,true)}
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span class="c-name">${city.n}</span>
+          <span class="c-pop">${pop2s(city.pop)} hab</span>
+          ${city.pois?city.pois.slice(0,4).map(p=>`<span class="c-poi" title="${p.v}">${POIM[p.t]?.icon||"📍"}</span>`).join(""):""}
+          ${pills?`<span style="display:flex;gap:2px">${pills}</span>`:""}
+        </div>
+      </div>
+      ${priceTag(city.p,city.l,true)}
+      ${hasD?`<span style="color:#D1D5DB;font-size:10px;flex-shrink:0;transition:transform .2s;transform:${isOpen?"rotate(180deg)":"none"}">▾</span>`:""}
+    </div>
+    <div style="display:${isOpen?"block":"none"}">
+      ${isOpen?renderDetail(city,sect.id):""}
+    </div>
+  </div>`;
+}
+
+function renderSect(sect,delay){
+  const prices=sect.cities.map(c=>c.p);
+  const avgP=Math.round(prices.reduce((a,v)=>a+v,0)/Math.max(prices.length,1));
+  const avgL=al(sect);
+  const t=T[tier(avgP)];
+  const isOpen=openSect===sect.id;
+  const filt=curFilter==="all"?sect.cities:sect.cities.filter(c=>tier(c.p)===curFilter);
+  if(curFilter!=="all"&&filt.length===0) return "";
+  const sorted=[...filt].sort((a,b)=>b.p-a.p);
+  return `
+  <div class="sb pop${isOpen?" open":""}" id="sect-${sect.id}" style="animation-delay:${delay*.04}s;${isOpen?`border-color:${t.border};box-shadow:0 4px 16px ${t.dot}22`:""}">
+    <div class="sh" onclick="toggleSect('${sect.id}')"
+      style="background:${isOpen?t.pastel:`linear-gradient(to right,${t.pastel},#fff)`};${isOpen?`border-bottom:1.5px solid ${t.border}`:""}">
+      <div class="s-accent" style="background:${t.dot};box-shadow:0 0 6px ${t.dot}88;min-height:36px"></div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span class="s-name">${sect.name}</span>
+          <span class="s-zone" style="background:${t.dot}18;color:${t.txt}">${sect.zone}</span>
+        </div>
+        <div class="s-desc">${sect.desc} · ${sect.cities.length} communes</div>
+      </div>
+      <div style="flex-shrink:0;text-align:right">
+        <div class="s-price" style="color:${t.dot}">${f(avgP)} <span style="font-size:9.5px;color:#9CA3AF">€/m²</span></div>
+        <div class="s-range">${f(Math.min(...prices))} – ${f(Math.max(...prices))}</div>
+      </div>
+      <div class="s-badge" style="background:${t.pastel};border-color:${t.border};color:${t.txt}">
+        ${dotEl(t.dot,5)} ${t.name}
+      </div>
+      <span class="chev" style="transform:${isOpen?"rotate(180deg)":"none"}">▾</span>
+    </div>
+    <div style="display:${isOpen?"block":"none"};background:#fff">
+      <div class="ss" style="background:${t.pastel}44">
+        ${[{l:"Prix médian /m²",v:`${f(avgP)} €`,c:t.dot},{l:"Achat 100 m²",v:`≈${f(Math.round(avgP*100/1000))}k€`},{l:"Loyer médian /m²",v:`${avgL} €`},{l:"Rendement brut",v:`${rt(avgP,parseFloat(avgL))}%`,c:"#10B981",sub:`net≈${(parseFloat(rt(avgP,parseFloat(avgL)))-2).toFixed(1)}%`}]
+        .map(x=>`<div class="ss-cell"><div class="ss-l">${x.l}</div><div class="ss-v" style="color:${x.c||"#111827"}">${x.v}</div>${x.sub?`<div class="ss-sub">${x.sub}</div>`:""}</div>`).join("")}
+      </div>
+      ${sorted.map(city=>renderCity(city,sect)).join("")}
+    </div>
+  </div>`;
+}
+
+function renderAll(){
+  document.getElementById("sect-list").innerHTML=SECTEURS.map((s,i)=>renderSect(s,i)).join("");
+  // update markers visibility
+  SECTEURS.forEach(sect=>{
+    sect.cities.forEach(city=>{
+      const key=`${sect.id}||${city.n}`;
+      const m=markers[key];if(!m) return;
+      const visible=(curFilter==="all"||tier(city.p)===curFilter);
+      const t=T[tier(city.p)];
+      const sz=city.pop>50000?14:city.pop>10000?12:10;
+      if(visible&&!map.hasLayer(m)) m.addTo(map);
+      if(!visible&&map.hasLayer(m)) map.removeLayer(m);
+      // update icon if active
+      const cid=`city-${sect.id}-${city.n.replace(/\s/g,"-")}`;
+      m.setIcon(openCity===cid ? makePulseIcon(t.dot) : makeIcon(t.dot,sz));
+    });
+  });
+}
+
+// ── TOGGLE SECT ──────────────────────────────────────────────────────────
+window.toggleSect=function(id){
+  if(openSect===id){openSect=null;}
+  else{
+    openSect=id;openCity=null;
+    // zoom map to this sector
+    const sect=SECTEURS.find(s=>s.id===id);
+    const pts=sect.cities.filter(c=>c.lat&&c.lng).map(c=>[c.lat,c.lng]);
+    if(pts.length) map.flyToBounds(L.latLngBounds(pts),{padding:[30,30],maxZoom:13,duration:.8});
+  }
+  renderAll();
+};
+
+// ── TOGGLE CITY ──────────────────────────────────────────────────────────
+window.toggleCity=function(cityId,sectId){
+  openCity=openCity===cityId?null:cityId;
+  renderAll();
+  // zoom map to this city
+  if(openCity){
+    const sect=SECTEURS.find(s=>s.id===sectId);
+    const city=sect?.cities.find(c=>`city-${sectId}-${c.n.replace(/\s/g,"-")}`===cityId);
+    if(city?.lat) map.flyTo([city.lat,city.lng],14,{duration:.6});
+  }
+};
+
+// ── SEARCH ────────────────────────────────────────────────────────────────
+function doSearch(raw){
+  const q=raw.toLowerCase().trim();
+  const srWrap=document.getElementById("sr-wrap");
+  const sl=document.getElementById("sect-list");
+  document.getElementById("sclear").style.display=raw?"block":"none";
+  if(q.length<2){srWrap.className="";sl.style.display="";renderAll();return;}
+  sl.style.display="none";
+  const res=[];
+  for(const s of SECTEURS)
+    for(const c of s.cities)
+      if(c.n.toLowerCase().includes(q)||c.q?.some(qt=>qt.n.toLowerCase().includes(q)))
+        res.push({city:c,sect:s});
+  srWrap.className="vis";
+  if(res.length===0){srWrap.innerHTML=`<p style="color:#9CA3AF;font-size:11px;padding:8px 0">Aucun résultat pour « ${raw} »</p>`;return;}
+  srWrap.innerHTML=`<p style="color:#9CA3AF;font-size:11px;margin-bottom:8px"><strong style="color:#374151">${res.length}</strong> résultat${res.length!==1?"s":""}</p>`
+    +res.map(({city,sect})=>{
+      const t=T[tier(city.p)];
+      return `<div class="sres pop" style="border-color:${t.border};border-left-color:${t.dot}">
+        <div class="sres-h">
+          ${dotEl(t.dot,7,true)}
+          <div style="flex:1"><span class="sr-name">${city.n}</span><span class="sr-sect">Secteur ${sect.name}</span></div>
+          ${priceTag(city.p,city.l,true)}
+        </div>
+        ${renderDetail(city,sect.id)}
+      </div>`;
+    }).join("");
+  // zoom map to results
+  const pts=res.filter(r=>r.city.lat&&r.city.lng).map(r=>[r.city.lat,r.city.lng]);
+  if(pts.length) map.flyToBounds(L.latLngBounds(pts),{padding:[40,40],maxZoom:14,duration:.8});
+}
+
+document.getElementById("search").addEventListener("input",e=>doSearch(e.target.value));
+document.getElementById("sclear").addEventListener("click",()=>{document.getElementById("search").value="";doSearch("");});
+
+// ── FILTER ────────────────────────────────────────────────────────────────
+document.querySelectorAll(".fbtn").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    curFilter=btn.dataset.f;openSect=null;openCity=null;
+    document.querySelectorAll(".fbtn").forEach(b=>{
+      const k=b.dataset.f;const t=T[k]||{};const a=k===curFilter;
+      b.style.background=a&&k!=="all"?t.pastel:a?"#111827":"rgba(255,255,255,.7)";
+      b.style.borderColor=a&&k!=="all"?t.border:a?"#111827":"rgba(0,0,0,.12)";
+      b.style.color=a&&k!=="all"?t.txt:a?"#fff":"#6B7280";
+    });
+    renderAll();
+  });
+});
+
+// ── INIT ──────────────────────────────────────────────────────────────────
+renderAll();
+</script>
+</body>
+</html>
