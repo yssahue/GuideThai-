@@ -1,0 +1,922 @@
+import { useState } from "react";
+
+/* ─── GLOBAL STYLES ─────────────────────────────────────────── */
+const G = {
+  bg: "#0C0F1A",
+  surface: "#141824",
+  card: "#1C2235",
+  border: "rgba(255,255,255,0.07)",
+  gold: "#D4A853",
+  copper: "#C17A5B",
+  sage: "#7FA882",
+  teal: "#3D8A7A",
+  plum: "#7B5EA7",
+  text: "#F0EDE8",
+  muted: "#8A9BB5",
+  dim: "#4A5568",
+  red: "#E05A5A",
+};
+
+const css = `
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=DM+Sans:wght@300;400;500;600&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: ${G.bg}; }
+  ::-webkit-scrollbar { width: 0; height: 0; }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes shimmer {
+    0%,100% { opacity: 0.6; } 50% { opacity: 1; }
+  }
+  .fade-up { animation: fadeUp 0.4s ease forwards; }
+  .card-hover { transition: transform 0.2s, box-shadow 0.2s; }
+  .card-hover:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
+`;
+
+/* ─── DATA ───────────────────────────────────────────────────── */
+const ROUTE = [
+  { code: "CDG", label: "Paris", date: "29 juil 16h25", type: "flight", color: G.copper },
+  { code: "DOH", label: "Doha", date: "29 juil 23h45", type: "transit", color: G.dim },
+  { code: "BKK", label: "Bangkok", date: "30 juil 12h55", type: "city", color: G.gold },
+  { code: "🚆", label: "Train nuit", date: "30 juil ~18h", type: "transport", color: G.teal },
+  { code: "CNX", label: "Chiang Mai", date: "31 juil 07h30", type: "city", color: G.teal },
+  { code: "🚆", label: "Train nuit", date: "3 août ~18h", type: "transport", color: G.teal },
+  { code: "BKK", label: "Bangkok", date: "4 août 07h30", type: "city", color: G.gold },
+  { code: "✈️", label: "Vol inter.", date: "4 août après-midi", type: "transport", color: G.copper },
+  { code: "KL", label: "Kao Lak", date: "4 août", type: "city", color: G.sage },
+  { code: "KS", label: "Khao Sok", date: "7 août", type: "city", color: G.sage },
+  { code: "KPG", label: "Ko Phangan", date: "9 août", type: "city", color: G.plum },
+  { code: "KT", label: "Koh Tao", date: "13 août", type: "city", color: "#5B9BD5" },
+  { code: "BKK", label: "Bangkok", date: "17 août", type: "city", color: G.gold },
+  { code: "CDG", label: "Paris", date: "19 août 15h20", type: "flight", color: G.copper },
+];
+
+const DESTINATIONS = [
+  {
+    id: "bkk1", emoji: "🏙️", name: "Bangkok", tag: "Arrivée", color: G.gold,
+    nights: "1N", dates: "29–30 juil", periode: "Arrivée + train de nuit",
+    meteo: "🌦️ 32°C · Humide · Averses ponctuelles",
+    intro: "1 nuit pour récupérer du vol, manger dans Chinatown et prendre le train de nuit vers le nord. Bangkok se vivra mieux au retour — ici, c'est l'élan du départ.",
+    urgence: { icon: "🚆", text: "Train de nuit le 30 juillet ~18h depuis gare Krung Thep Aphiwat (Bang Sue). Réserver en avance sur thairailwayticket.com — wagon-lit 2e classe." },
+    quartiers: [
+      { nom: "Silom / Sathorn", vibe: "Business · BTS · Rooftops", tip: "Meilleur quartier pour une seule nuit. Bien desservi, taxis partout, 30 min de la gare ferroviaire.", icon: "🌃" },
+      { nom: "Phra Nakhon / Rattanakosin", vibe: "Temples · Histoire · Backpackers", tip: "Si tu arrives avec de l'énergie pour le Grand Palace l'après-midi, dormir ici t'évite un trajet.", icon: "🛕" },
+    ],
+    food: [
+      { nom: "Chinatown – Yaowarat", detail: "Le premier soir. Roast duck, seafood sur trottoir, calmars grillés. Y aller à 20h quand les stands ouvrent vraiment.", must: true },
+      { nom: "Jay Fai", detail: "La street food étoilée Michelin. Crabe omelette légendaire. File d'attente 2h — y aller à l'ouverture ou réserver.", must: true },
+      { nom: "Or Tor Kor Market", detail: "Le marché le plus propre de Bangkok. Fruits exotiques, curry, traiteurs thaïs haut de gamme. Le matin.", must: false },
+    ],
+    activites: [
+      { icon: "🛕", nom: "Grand Palace + Wat Pho", detail: "Si tu n'es pas HS du vol. Arriver à 8h pour éviter la foule. Prévoir 3h." },
+      { icon: "🌇", nom: "Sunset depuis un rooftop", detail: "Vertigo (Banyan Tree), Octave Rooftop ou Sky Bar (State Tower). Au moins une fois." },
+      { icon: "🚆", nom: "Préparer les billets train", detail: "Matin du 30 : aller à la gare ou acheter en ligne. Train n°9 ou n°13. Wagon-lit 2e classe = couchette avec rideau, clim, linge propre." },
+      { icon: "⛵", nom: "Khlong Saen Saep", detail: "Le canal express pour se déplacer comme un local. Bateau longue queue dans le trafic d'eau." },
+    ],
+    shopping: [
+      { nom: "Tailleurs Bangkok – MBK / Silom", detail: "2–3 essayages nécessaires. Donner au moins 48h. Apporter des photos de références. Budget costume sur-mesure : 150–250€.", icon: "🧵" },
+      { nom: "Chatuchak Weekend Market", detail: "Sam/dim uniquement. Artisanat, vintage, plantes, fringues. Y aller à 8h avant la chaleur.", icon: "🛍️" },
+      { nom: "Terminal 21", detail: "Centre commercial par étages-pays. Chaque étage = une ville du monde. Fringues thaïes à petits prix.", icon: "🏬" },
+    ],
+    transport_out: {
+      de: "Gare Krung Thep Aphiwat (Bang Sue)",
+      vers: "Chiang Mai",
+      moyen: "🚆 Train de nuit SRT · Train n°9 ou n°13",
+      duree: "12–13h · Départ ~18h · Arrivée ~07h30",
+      prix: "15–25€ wagon-lit 2e classe",
+      conseil: "Réserver sur thairailwayticket.com dès maintenant. Wagon-lit 2e classe : couchette + rideau + clim + linge. L'expérience la plus iconique du voyage.",
+    },
+    heberg: [
+      { type: "Boutique hôtel Silom", budget: "40–80€/nuit", tip: "Mode Hôtel, Silom Serene. Bien placé pour la gare." },
+      { type: "Guesthouse Rattanakosin", budget: "20–40€/nuit", tip: "Près des temples pour arriver à pied." },
+    ],
+  },
+  {
+    id: "chiangmai", emoji: "🏔️", name: "Chiang Mai", tag: "Nord", color: G.teal,
+    nights: "3N", dates: "31 juil – 3 août", periode: "Train de nuit aller-retour",
+    meteo: "🌿 28°C · Averses courtes le soir · Verdure maximale · Plus doux qu'à Bangkok",
+    intro: "La capitale culturelle du nord. Entourée de montagnes, parsemée de temples dorés, envahie de cafés de spécialité et de marchés nocturnes. C'est le contrepoint parfait au chaos de Bangkok — et la ville la plus photographiable du voyage.",
+    urgence: { icon: "🚆", text: "Retour train nuit le 3 août ~18h depuis la gare de Chiang Mai → Bangkok arrivée 4 août ~07h30. Acheter les deux billets (aller + retour) en même temps." },
+    quartiers: [
+      { nom: "Vieille Ville (Old City)", vibe: "Temples · Guesthouses · Nuit animée", tip: "Entourée de douves carrées. À pied partout. Le quartier idéal pour se poser 3 nuits. Temples à chaque angle, marchés nocturnes, cafés branchés. Le cœur de tout.", icon: "🏯" },
+      { nom: "Nimman (Nimmanhaemin)", vibe: "Hipster · Cafés de spécialité · Concept stores", tip: "Le Ari de Chiang Mai. Café culture intense, boutiques créatives, restaurants fusion. Pour les soirées 2 et 3.", icon: "☕" },
+      { nom: "Th Charoen Prathet", vibe: "Bord de rivière Ping · Galeries d'art", tip: "Moins touristique, plus local. Le Walking Street du samedi sur Wualai Road part de là — incontournable.", icon: "🎨" },
+    ],
+    food: [
+      { nom: "Khao Soi", detail: "Le plat emblématique du nord. Curry rouge au lait de coco avec nouilles croustillantes. Khao Soi Islam ou Khao Soi Gai ou Khao Soi Khun Yai.", must: true },
+      { nom: "Marché nocturne de l'Old City", detail: "Chaque soir dans la vieille ville. Street food locale, saucisses du nord (sai ua), larb, curry vert.", must: true },
+      { nom: "Sunday Walking Street Wualai", detail: "Le dimanche uniquement. Artisanat local, nourriture thaïe traditionnelle, ambiance unique. Si tu es là un dimanche : priorité absolue.", must: false },
+      { nom: "Cafés de spécialité Nimman", detail: "Ristr8to, Graph Café, Ponganes Espresso. Chiang Mai = capitale thaïe du café de spécialité. Matinée entière à explorer.", must: false },
+    ],
+    activites: [
+      { icon: "🐘", nom: "Sanctuaire éthique éléphants", detail: "Elephant Nature Park (le meilleur, réserver 2–3 semaines avant) ou Elephant Sanctuary. Pas de dressage, pas de cirque. Bain dans la rivière, nourrir, observer. L'une des meilleures expériences du voyage. Demi-journée ou journée entière." },
+      { icon: "🛕", nom: "Doi Suthep à l'aube", detail: "Temple bouddhiste sur la montagne, 15km du centre. Songthaew rouge depuis l'Old City (~100 THB). Y aller à 7h avant les cars de touristes. Vue panoramique sur toute la ville dans la brume matinale." },
+      { icon: "🍳", nom: "Cours de cuisine thaïe", detail: "Chiang Mai = meilleure ville pour ça. Thai Farm Cooking School (marché le matin + ferme + cuisine), Zabb-E-Lee. Contenu parfait pour @be_beckss. Réserver à l'avance." },
+      { icon: "🌿", nom: "Trek 1 jour montagne", detail: "Villages Hmong ou Karen en périphérie. Cascades, forêt, points de vue. Passer par une agence locale sérieuse (pas les tours hôtels). Demander un guide qui parle vraiment la langue du village." },
+      { icon: "☕", nom: "Café crawl Nimman", detail: "Une matinée entière à pied entre Ristr8to, Graph Café, Ponganes. Cafés de spécialité torréfactés sur place. Le meilleur café du voyage." },
+      { icon: "🎨", nom: "Saturday/Sunday Walking Street", detail: "Sam : Wualai Road. Dim : Th Wichayanon. Artisanat local authentique, bijoux, textiles, food. Ambiance incomparable. Si tu es là un week-end, c'est prioritaire." },
+      { icon: "🌺", nom: "Doi Inthanon National Park", detail: "Le toit de la Thaïlande (2565m). Cascades, brume, jardins royaux. Excursion journée. Un peu frisquet au sommet — prendre une couche." },
+    ],
+    shopping: [
+      { nom: "Night Bazaar", detail: "Tous les soirs. Artisanat thaï et chiang mai, soieries, lanternes. Négocier sans hésiter (–30% possible).", icon: "🏮" },
+      { nom: "Soieries & textiles", detail: "La spécialité du nord. Tissu Hmong, batik, écharpes en soie. Boutiques autour de l'Old City.", icon: "🧶" },
+      { nom: "Lanna Craft Market", detail: "Artisanat authentique Karen et Hmong. Pas de reproductions chinoises. Demander 'local made'.", icon: "🪴" },
+    ],
+    transport_out: {
+      de: "Gare ferroviaire Chiang Mai",
+      vers: "Bangkok (Krung Thep Aphiwat)",
+      moyen: "🚆 Train de nuit SRT retour",
+      duree: "12–13h · Départ ~18h · Arrivée Bangkok ~07h30",
+      prix: "15–25€ wagon-lit 2e classe",
+      conseil: "Arrivée Bangkok matin du 4 août. Consigne gare ou hôtel pour les bagages. Vol intérieur Don Mueang → Phuket l'après-midi (Air Asia / Thai Lion Air, 30–60€, 1h20). Taxi Don Mueang depuis centre : 30–45 min.",
+    },
+    heberg: [
+      { type: "Boutique hôtel Old City", budget: "30–70€/nuit", tip: "Rachamankha, Tamarind Village, 3 Sis. Dans les douves, style lanna traditionnel." },
+      { type: "Guesthouse Nimman", budget: "20–45€/nuit", tip: "Artel House, Hug Nimman. Hipster, bien placé pour les cafés." },
+      { type: "Glamping jungle périphérie", budget: "60–100€/nuit", tip: "Option insolite : tente de luxe dans la forêt à 15 min de la ville." },
+    ],
+  },
+  {
+    id: "kaolak", emoji: "🌊", name: "Kao Lak", tag: "Andaman", color: G.sage,
+    nights: "3N", dates: "4–7 août", periode: "Côte Andaman",
+    meteo: "🌧️ 30°C · Saison pluies côté Andaman · Averses matin/soir · Soleil le reste · Plages quasi-désertes",
+    intro: "Kao Lak en août, c'est la Thaïlande sans les touristes. Les îles Similan sont fermées (protection marine mai-octobre) — mais c'est justement ce qui la rend magique : plages immenses pour toi seule, mangroves à kayak, et la base parfaite pour rejoindre Khao Sok.",
+    urgence: { icon: "⚠️", text: "Îles Similan FERMÉES mai-octobre. Les Surin Islands sont accessibles en août. Khao Sok est à 1h30 en minibus : prévoir 1 nuit là-bas depuis Kao Lak." },
+    quartiers: [
+      { nom: "Nang Thong Beach", vibe: "Centre · Restaurants · Animation", tip: "La zone principale. Marché nocturne plusieurs soirs. Meilleur compromis services/ambiance.", icon: "🏖️" },
+      { nom: "Khuk Khak Beach", vibe: "Calme · Nord de Kao Lak", tip: "Plage quasi-déserte. Pour les matins solo et les couchers de soleil à deux.", icon: "🌅" },
+      { nom: "Bang Sak Beach", vibe: "Sauvage · Isolé · Nature pure", tip: "Coup de cœur garanti. Aucun touriste. Bungalows simples face à la mer. Le bout du monde.", icon: "🌿" },
+    ],
+    food: [
+      { nom: "Marchés nocturnes Nang Thong", detail: "Street food locale fraîche. Poisson grillé, pad thaï, mangue sticky rice. Moins de 3€ le repas.", must: true },
+      { nom: "Restaurants de bord de mer", detail: "Seafood frais pêché le matin. Les restos face à la plage à Nang Thong servent du crabe et des crevettes à prix locaux.", must: false },
+    ],
+    activites: [
+      { icon: "🚣", nom: "Kayak en mangrove", detail: "Tour organisé le matin (~3h). Incontournable dans la région. Oiseaux rares, crabes, forêt aquatique labyrinthique. Partir à 7h avant la chaleur. ~25–35€/pers." },
+      { icon: "🤿", nom: "Surin Islands (si météo ok)", detail: "Accessibles en août contrairement aux Similan. Snorkeling sur coraux intacts, requins-baleines possibles de nov à avril mais tortues toute l'année. Excursion journée ~60–80€." },
+      { icon: "🌊", nom: "Tsunami Memorial", detail: "2004. Un bateau de la marine royale thaïlandaise porté à 2km à l'intérieur des terres par la vague. Site sobre, poignant, indispensable pour comprendre la région." },
+      { icon: "🏖️", nom: "Plages désertes & farniente", detail: "Kao Lak en août = presque vide. Profite. La plage pour toi, le silence, les cocotiers. C'est aussi ça le voyage." },
+      { icon: "🌿", nom: "Parc national Khao Lak-Lam Ru", detail: "Randonnée dans la forêt primaire. Observation wildlife (singes, oiseaux tropicaux). Pas besoin de guide pour les sentiers balisés." },
+    ],
+    shopping: [
+      { nom: "Artisanat local Night Market", detail: "Petite échelle mais authentique. Tissus thaïs, épices, souvenirs locaux sans surpayer.", icon: "🏮" },
+    ],
+    transport_out: {
+      de: "Kao Lak",
+      vers: "Khao Sok National Park",
+      moyen: "🚐 Minibus privé ou songhaew",
+      duree: "1h30 – 2h",
+      prix: "15–25€ en minibus partagé",
+      conseil: "Réserver via l'hébergement la veille. Jonction naturelle entre côte Andaman et Golfe de Thaïlande. Khao Sok vaut absolument 1–2 nuits.",
+    },
+    heberg: [
+      { type: "Bungalow bord de mer", budget: "30–60€/nuit", tip: "Khaolak Baan Kosta, Khaolak Merlin. Face à la mer, jardin tropical." },
+      { type: "Eco-resort", budget: "60–120€/nuit", tip: "La Flora Resort. Piscine, spa, bungalows dans les arbres. L'option insolite." },
+      { type: "Guesthouse simple Bang Sak", budget: "15–30€/nuit", tip: "Pour l'authenticité maximale. Très local, très calme." },
+    ],
+  },
+  {
+    id: "khaosok", emoji: "🌿", name: "Khao Sok", tag: "Jungle", color: "#5A9E72",
+    nights: "2N", dates: "7–9 août", periode: "Jungle primaire & lac flottant",
+    meteo: "🌦️ 30°C · Brumes matinales sur le lac · Averses tropicales · Verdure à couper le souffle",
+    intro: "La forêt primaire de Khao Sok est l'une des plus anciennes d'Asie du Sud-Est — 160 millions d'années. Le lac Cheow Lan et ses bungalows flottants sont la photo du voyage. Une nuit sur le lac, une nuit au village : la combinaison parfaite.",
+    urgence: null,
+    quartiers: [
+      { nom: "Village de Khao Sok", vibe: "Entrée du parc · Guesthouses · Jungle", tip: "Base pour les treks. Petite rue principale avec restos et loueurs de canots. Ambiance simple et authentique. 1 nuit ici + 1 nuit sur le lac.", icon: "🌲" },
+      { nom: "Lac Cheow Lan – Bungalows flottants", vibe: "Sur l'eau · Silence absolu · Magie", tip: "L'expérience la plus unique du voyage. 1 nuit obligatoire. Réserver MAINTENANT — sold out en été. Anurak, Elephant Hills, ou Cheow Lan Lake House.", icon: "🛖" },
+    ],
+    food: [
+      { nom: "Resto du village", detail: "Cuisine thaïe simple et fraîche. Curry vert, riz frit, soupe. 3–5€ le repas. Le soir, tous les voyageurs se retrouvent au même endroit.", must: false },
+      { nom: "Repas sur le lac inclus", detail: "Les bungalows flottants incluent généralement les repas. Poisson du lac, riz, légumes sautés. Manger face aux falaises karstiques.", must: true },
+    ],
+    activites: [
+      { icon: "🛖", nom: "Floating bungalow lac Cheow Lan", detail: "Dormir sur le lac. Se réveiller dans le brouillard à 6h, les falaises calcaires qui émergent. Nager dans l'eau turquoise avant le petit-déj. La photo. Anurak Community Lodge ou Elephant Hills pour le luxe, Cheow Lan Lake House pour l'authentique." },
+      { icon: "🦜", nom: "Night safari en jungle", detail: "Guide + lampe frontale après le dîner. Chercher les serpents arboricoles, les civettes, les singes nocturnes, les grenouilles phosphorescentes. 2–3h. Frissons garantis." },
+      { icon: "🚣", nom: "Canoë rivière Sok", detail: "La rivière traverse la forêt primaire. Pagayer en silence, observer les oiseaux, les lézards monitor sur les berges. Location ~5€/h. Y aller tôt le matin." },
+      { icon: "🐒", nom: "Trek gibbons à l'aube (5h30)", detail: "Se lever à 5h30 avec le guide. Les gibbons chantent à l'aube — un son qui porte à 1km. Les apercevoir dans la canopée est un privilège. Ne pas louper ça." },
+      { icon: "🪷", nom: "Rafflesia (si saison)", detail: "La plus grande fleur du monde pousse dans ce parc. Floraison aléatoire. Demander au guide s'il y en a une accessible." },
+    ],
+    shopping: [],
+    transport_out: {
+      de: "Khao Sok / Surat Thani",
+      vers: "Koh Phangan",
+      moyen: "🚐 + ⛴️ Minibus + Ferry (Lompraya ou Seatran)",
+      duree: "3–4h total",
+      prix: "15–20€ billet combiné tout-en-un",
+      conseil: "Ticket combiné depuis la guesthouse. Le minibus te récupère, te dépose au ferry Don Sak. Arrivée Koh Phangan ~13h. Très bien organisé.",
+    },
+    heberg: [
+      { type: "Floating bungalow – lac Cheow Lan", budget: "60–150€/nuit", tip: "Anurak Community Lodge (éco-luxe), Elephant Hills (glamping), Cheow Lan Lake House (authentique). Réserver 2 mois avant." },
+      { type: "Guesthouse village Khao Sok", budget: "15–35€/nuit", tip: "Morning Mist Resort, Our Jungle House. Bungalows dans les arbres au bord de la rivière." },
+    ],
+  },
+  {
+    id: "phangan", emoji: "🌙", name: "Koh Phangan", tag: "Golfe", color: G.plum,
+    nights: "4N", dates: "9–13 août", periode: "Full Moon · Plages cachées · Yoga",
+    meteo: "🌤️ 31°C · Côté Golfe = plus clément · Quelques averses · Beaucoup de soleil",
+    intro: "Koh Phangan c'est deux îles en une : la fête totale à Haad Rin la nuit de la Full Moon, et l'une des plus belles îles authentiques de Thaïlande le reste du temps. Depuis Srithanu, tu n'entendras même pas la fête si tu n'y vas pas.",
+    urgence: { icon: "🌕", text: "FULL MOON PARTY : ~12 août 2026 (date exacte à confirmer). Si tu veux y aller : dors à Srithanu, taxi vers Haad Rin le soir, rentre après. Si non : reste au nord, tu n'en sauras rien." },
+    quartiers: [
+      { nom: "Srithanu (côté ouest)", vibe: "Village yogi · Couchers de soleil · Expats · Bars cool", tip: "Le meilleur quartier de l'île pour une vibe locale et authentique. Bars sympas en bois sur pilotis, yoga studios, plage face au soleil couchant. Tout le contraire de la Full Moon.", icon: "🧘" },
+      { nom: "Chaloklum (nord)", vibe: "Village de pêcheurs · 100% local", tip: "Aucun touriste. Bateaux de pêche le matin, marché local à 7h. Déjeuner à côté des pêcheurs. Le vrai Koh Phangan.", icon: "⚓" },
+      { nom: "Haad Kuat / Bottle Beach", vibe: "Accessible en longtail uniquement · Paradisiaque", tip: "Longtail depuis Chaloklum (~200 THB, 15 min). Plage sans route, sans scooter, sans bruit. La mer, du sable blanc, des palmiers. Y passer la journée entière.", icon: "🏝️" },
+      { nom: "Haad Rin (sud-est)", vibe: "Full Moon Party zone · Bars · Touristes", tip: "Ne pas dormir ici. Y aller uniquement le soir de la Full Moon si tu veux, en taxi depuis Srithanu. Rentrer après.", icon: "🌕" },
+      { nom: "Thong Sala (port)", vibe: "Arrivée des ferries · Marché · Pratique", tip: "Zone de transit. Le marché nocturne Walking Street est là — bon pour un soir.", icon: "⛴️" },
+    ],
+    food: [
+      { nom: "Walking Street Thong Sala", detail: "Marché nocturne du vendredi. Street food au top : satay, curry, jus de fruits frais, desserts thaïs.", must: true },
+      { nom: "Srithanu restaurants", detail: "Bons petits restos locaux sur pilotis. Poisson frais, shakes, petits-dej healthy. Ambiance chill.", must: false },
+      { nom: "Sushi (oui vraiment)", detail: "Koh Phangan a une scène japonaise étonnante. Pour changer des currys.", must: false },
+    ],
+    activites: [
+      { icon: "🏝️", nom: "Ang Thong Marine Park (day trip)", detail: "L'excursion qui vaut le détour. Archipel de 42 îles karstiques. Kayak dans les grottes, snorkeling, lac emeraude intérieur (le fameux Ko Mae Ko). Le plus beau day trip du voyage. Excursion organisée ~50–70€ depuis Ko Phangan." },
+      { icon: "🧘", nom: "Yoga & wellness Srithanu", detail: "Abundant Space, Orion Healing, The Yoga Retreat. Cours dès 7h face à la mer. Yin, Vinyasa, Sound Healing. 8–15€ la session. Au moins deux matinées." },
+      { icon: "🛶", nom: "Bottle Beach en longtail", detail: "Depuis Chaloklum, 15 min sur l'eau. La plage la plus belle de l'île. Pas de route. Apporter de l'eau et de la lecture. Revenir avant 17h (dernier longtail)." },
+      { icon: "🏍️", nom: "Tour de l'île en scooter", detail: "Louer un scooter 1 journée (~200 THB/5€). Route de Srithanu → Chaloklum → Haad Kuat viewpoint → cascade Phaeng → viewpoint panoramique Wang Sai → plages est → retour. Liberté totale. Attention aux routes en pente mouillées." },
+      { icon: "🌕", nom: "Full Moon Party (optionnel)", detail: "La plus grande fête de plage au monde. 20 000–30 000 personnes à Haad Rin. Musique électronique, fire shows, alcool en seaux. Fun si tu aimes, enfer si non. Y aller avec de l'argent cash, pas de sac de valeur, chaussures fermées (éclats de verre sur la plage)." },
+      { icon: "🤿", nom: "Snorkeling Haad Yuan / Mae Haad", detail: "Banc de sable qui relie 2 îles à pied à marée basse à Mae Haad. Snorkeling direct depuis la plage à Haad Yuan. Tortues fréquentes." },
+    ],
+    shopping: [
+      { nom: "Walking Street Thong Sala", detail: "Vêtements bohème, bijoux, attrape-rêves, huiles essentielles. Prix corrects.", icon: "🛍️" },
+      { nom: "Boutiques Srithanu", detail: "Tenues de yoga, maillots, robes légères. Vibe boho. Les meilleures fringues de voyage.", icon: "👗" },
+    ],
+    transport_out: {
+      de: "Koh Phangan – Thong Sala",
+      vers: "Koh Tao",
+      moyen: "⛴️ Ferry Lompraya express",
+      duree: "1h",
+      prix: "10–15€",
+      conseil: "Plusieurs départs par jour. Réserver la veille à l'hébergement ou en ligne. Le Lompraya est le plus rapide et le plus confortable. Lomprayah High Speed Ferry.",
+    },
+    heberg: [
+      { type: "Villa avec piscine Srithanu", budget: "80–150€/nuit (à 2)", tip: "Nombreuses villas privées avec piscine. Airbnb ou booking direct. Le meilleur rapport qualité/expérience." },
+      { type: "Bungalow plage Haad Yuan", budget: "40–80€/nuit", tip: "Accessible uniquement en bateau. L'option la plus insolite — vivre sur une plage sans route." },
+      { type: "Boutique hôtel Srithanu", budget: "50–100€/nuit", tip: "Haad Yao Bay Resort, Rocky Mountain Hotel. Vue sur mer, calme." },
+    ],
+  },
+  {
+    id: "kohtao", emoji: "🤿", name: "Koh Tao", tag: "Plongée", color: "#5B9BD5",
+    nights: "4N", dates: "13–17 août", periode: "Capitale mondiale de la plongée",
+    meteo: "🌤️ 30°C · Côté Golfe · Bon temps en août · Eaux claires · Idéal pour plonger",
+    intro: "La plus petite des trois îles du Golfe et la plus intense sous l'eau. Koh Tao forme plus de plongeurs PADI que n'importe quelle autre île au monde. Mais c'est aussi une île à couchers de soleil spectaculaires, à bars décontractés et à plages quasi-secrètes.",
+    urgence: null,
+    quartiers: [
+      { nom: "Sairee Beach", vibe: "Principale · Dive shops · Animée", tip: "La vie centrale. Longue plage de sable blanc, bars au bord de l'eau, dive shops partout. Meilleure base pour organiser la plongée. Snorkeling direct depuis la plage.", icon: "🏖️" },
+      { nom: "Mae Haad (port)", vibe: "Arrivée des ferries · Pratique", tip: "Zone de débarquement. Quelques bons restos. Pas idéal pour rester.", icon: "⛴️" },
+      { nom: "Chalok Ban Kao (sud)", vibe: "Calme · Belle baie · Moins de monde", tip: "Plus reposant que Sairee. Bons dive shops, belle vue sur Freedom Beach. Pour celles qui veulent la plongée sans l'animation.", icon: "🌊" },
+      { nom: "Tanote Bay / Mango Bay (est)", vibe: "Sauvage · Isolé · Snorkeling exceptionnel", tip: "Accessible en bateau ou scooter depuis Sairee (route cabossée). Eaux cristallines, coraux intacts, presque personne. Y passer une journée entière.", icon: "🪸" },
+    ],
+    food: [
+      { nom: "Restaurants Sairee Beach", detail: "Bonne scène food. Italian-thai, sushi, burgers, bols de riz. Après les plongées, on mange bien.", must: false },
+      { nom: "Barracuda Restaurant & Bar", detail: "Sur la plage à Sairee. Sunset + cocktail + seafood = la combinaison parfaite.", must: true },
+      { nom: "Marché du matin Mae Haad", detail: "Fruits frais, smoothies, petits dej thaïs à 1–2€. À faire chaque matin avant la plongée.", must: false },
+    ],
+    activites: [
+      { icon: "🤿", nom: "PADI Open Water (si non certifiée)", detail: "Koh Tao = la ville la moins chère et la plus simple pour passer son PADI. Formation 3 jours ~280–320€ (international standard). Inclut théorie, piscine, 4 plongées en mer. Dive shops recommandés : Big Blue, Crystal, Ban's Diving." },
+      { icon: "🤿", nom: "Fun dives (si certifiée)", detail: "Japanese Gardens, Chumphon Pinnacle, Southwest Pinnacle, HTMS Sattakut (épave). 10–15€ la plongée. Pack de 10 plongées = meilleur rapport." },
+      { icon: "🦈", nom: "Shark Bay snorkeling", detail: "Gratuit depuis la plage. Requins-bambous dormeurs fréquents au fond. Y aller à 6h30 avant les tours. Le plus accessible sans plongée." },
+      { icon: "🪸", nom: "Japanese Gardens (snorkeling)", detail: "Site de snorkeling / plongée. Coraux immenses, poissons perroquets, anémones et poissons-clowns. Accessible en kayak ou tour depuis Sairee." },
+      { icon: "🌅", nom: "Sunset depuis Sairee chaque soir", detail: "Rituel immuable. Un verre au John Suwan Viewpoint ou aux pieds dans le sable à Sairee. Jamais deux fois le même. Ne jamais rater." },
+      { icon: "🏔️", nom: "John Suwan Viewpoint trek", detail: "20–25 min de marche depuis Chalok. Vue 360° sur l'île, Koh Phangan en fond. Y aller au lever ou coucher du soleil. Gratuit, chemin balisé." },
+    ],
+    shopping: [
+      { nom: "T-shirts de dive & souvenirs", detail: "Chaque école de plongée a son merch. Les t-shirts 'Koh Tao diver' sont partout. Acheter chez ton dive shop.", icon: "👕" },
+      { nom: "Bijoux et bracelets", detail: "Petits marchés le long de Sairee Beach. Bijoux coquillages, bracelets brésiliens, attrape-rêves.", icon: "💎" },
+    ],
+    transport_out: {
+      de: "Koh Tao → Chumphon (ferry)",
+      vers: "Bangkok (Suvarnabhumi)",
+      moyen: "⛴️ Ferry Lompraya + ✈️ Vol intérieur Don Mueang",
+      duree: "Ferry 2h + Vol 1h15 · Total ~5–6h",
+      prix: "Ferry ~15€ + Vol ~30–50€",
+      conseil: "Ferry Lompraya tôt le matin → Chumphon → bus vers aéroport Chumphon (ou Surat Thani) → vol Don Mueang. Arriver Bangkok soir du 17. Option romantique : ferry → Chumphon + train de nuit sleeper → Bangkok 7h.",
+    },
+    heberg: [
+      { type: "Bungalow dive resort Sairee", budget: "30–70€/nuit", tip: "Big Blue Resort, Crystal Dive Resort. Inclut accès piscine et facilite l'organisation plongée." },
+      { type: "Boutique hôtel Chalok", budget: "40–80€/nuit", tip: "Jamahkiri Resort. Calme, vue mer, moins de monde qu'à Sairee." },
+      { type: "Villa avec vue colline", budget: "60–120€/nuit", tip: "Villas privées sur les hauteurs. Vue panoramique sur les deux côtés de l'île.", },
+    ],
+  },
+  {
+    id: "bkk2", emoji: "🏙️", name: "Bangkok", tag: "Retour", color: G.copper,
+    nights: "2N", dates: "17–18 août", periode: "Boucle finale",
+    meteo: "🌦️ 32°C · Août chaud et humide · Averses possible · Pas de problème pour visiter",
+    intro: "Le bouclage du voyage. Bangkok pour finir — Ayutthaya en day trip, les derniers massages, les derniers achats, le dernier dîner en rooftop. Vol retour le 19 août à 02h30.",
+    urgence: { icon: "✈️", text: "Vol retour 19 août à 02h30 (Suvarnabhumi BKK → DOH → CDG). Quitter l'hôtel le 18 août vers 22h30. Check-in en ligne 48h avant = dès le 17 août à 02h30." },
+    quartiers: [
+      { nom: "Ari", vibe: "Hipster · Local · Cafés · Marchés", tip: "Le meilleur quartier pour finir. Aucun touriste. Vie de quartier réelle, bons restos locaux, coffee shops. BTS Ari direct. 30 min de Suvarnabhumi.", icon: "☕" },
+      { nom: "Thonglor / Ekkamai", vibe: "Food scene · Bars locaux · Branchés", tip: "Bangkok la nuit, version locale. Pas Khaosan. Restaurants japonais, bars à cocktails, terrasses. Le vrai Bangkok nocturne.", icon: "🍸" },
+    ],
+    food: [
+      { nom: "Yaowarat (Chinatown) – dernier soir", detail: "Le grand final. Reprendre ce qui était le premier soir — mais cette fois tu sais commander, tu sais où aller. Boucler la boucle.", must: true },
+      { nom: "Or Tor Kor Market", detail: "Le meilleur marché alimentaire de Bangkok. Acheter les dernières épices, pâtes de curry, snacks thaïs pour ramener.", must: false },
+      { nom: "Rooftop bar final", detail: "Vertigo (Banyan Tree), Sky Bar (State Tower, vue depuis Hangover), Octave Rooftop. Marquer la fin du voyage avec vue sur la skyline.", must: true },
+    ],
+    activites: [
+      { icon: "🏛️", nom: "Ayutthaya – day trip", detail: "Ancienne capitale du royaume de Siam. 1h30 depuis la gare Hua Lamphong en train (~60 THB). Temples en ruines du 14e siècle, statues décapitées envahies par les racines d'arbres. Louer un vélo sur place pour aller de temple en temple. Une des plus belles journées possibles." },
+      { icon: "💆", nom: "Massage thaï final", detail: "Wat Pho Massage School (dans l'enceinte du temple) ou Health Land. Le vrai massage traditionnel. 1h = ~10€. En faire au moins 2 sur ces 2 nuits." },
+      { icon: "🛍️", nom: "Chatuchak Weekend Market", detail: "Si tu es là un samedi ou dimanche. Le plus grand marché extérieur du monde. Artisanat, vintage, plantes, fringues, céramiques. Y aller à 8h avant la chaleur." },
+      { icon: "🛕", nom: "Wat Pho / Grand Palace (si pas fait à l'aller)", detail: "Le Bouddha couché de 46m. Mosaïques nacrées. Le Grand Palace : la salle des miroirs thaïe. Arriver à 8h, sortir à 11h avant la foule de midi." },
+    ],
+    shopping: [
+      { nom: "Derniers achats tailleurs", detail: "Si tu avais commandé des habits sur-mesure à l'aller (premier passage Bangkok) — c'est maintenant que tu récupères.", icon: "🧵" },
+      { nom: "Cadeaux alimentaires Or Tor Kor", detail: "Pâtes de curry, thé thaï, épices, galettes de riz. Le meilleur endroit pour ramener de vraies choses.", icon: "🌶️" },
+      { nom: "MBK Center / Platinum Mall", detail: "Shopping de masse. Fringues, accessoires, copies. Marchander systématiquement (–30 à –40% premier prix).", icon: "🏬" },
+    ],
+    transport_out: {
+      de: "Bangkok – hôtel Ari ou Thonglor",
+      vers: "Aéroport Suvarnabhumi (BKK)",
+      moyen: "🚖 Grab / Taxi",
+      duree: "30–60 min selon trafic",
+      prix: "10–15€",
+      conseil: "Partir le 18 août à 22h30 maximum. Enregistrement Qatar Airways ouvre 3h avant (23h30). Check-in en ligne depuis le 17 août à 02h30. Terminal principal Suvarnabhumi = Qatar Airways.",
+    },
+    heberg: [
+      { type: "Hôtel boutique Ari", budget: "50–100€/nuit", tip: "Arize Hotel Sukhumvit, S31 Sukhumvit. Bien placé pour BTS." },
+      { type: "Hôtel lifestyle Thonglor", budget: "70–120€/nuit", tip: "Hotel Muse, SO Bangkok. Finir en beauté." },
+    ],
+  },
+];
+
+const PRATIQUE = {
+  visa: {
+    titre: "Visa & Entrée",
+    icon: "🛂",
+    items: [
+      { q: "Passeport valide", r: "Minimum 6 mois après la date de retour (19 août 2026). Vérifier MAINTENANT." },
+      { q: "Visa exemption", r: "La France bénéficie d'une exemption de visa pour la Thaïlande : 30 jours automatiques à l'arrivée. Depuis 2024 : prolongé à 60 jours. Vérifier la règle en vigueur en juillet 2026." },
+      { q: "Carte d'embarquement retour", r: "Les douaniers peuvent demander une preuve de billet retour. Ton vol Qatar du 19 août suffit." },
+      { q: "Formulaire TM6", r: "Supprimé depuis 2022. Plus de formulaire d'arrivée à remplir dans l'avion." },
+    ],
+  },
+  sante: {
+    titre: "Santé & Vaccins",
+    icon: "💊",
+    items: [
+      { q: "Hépatite A + B", r: "Recommandé. Si pas fait : consulter un médecin du voyage 6–8 semaines avant." },
+      { q: "Typhoid", r: "Recommandé pour les voyageurs qui mangent souvent en street food." },
+      { q: "Rage", r: "Recommandé si contact avec animaux sauvages (Khao Sok, éléphants)." },
+      { q: "Dengue & Malaria", r: "Risque faible en zones touristiques. Répulsif DEET 30–50% obligatoire. Moustiquaire si bungalows basiques jungle." },
+      { q: "Assurance voyage", r: "OBLIGATOIRE. Couvrir rapatriement + plongée sous-marine (vérifier la clause activités sportives). AVI International, Chapka, ou carte Visa Premier si tu l'as." },
+      { q: "Pharmacie de voyage", r: "Imodium, Smecta, Doliprane, antihistaminique, crème solaire 50+, DEET, pansements, sérum physiologique." },
+    ],
+  },
+  argent: {
+    titre: "Argent & Paiement",
+    icon: "💳",
+    items: [
+      { q: "Monnaie", r: "Baht thaïlandais (THB). 1€ ≈ 38–40 THB en 2026 (vérifier). Ne jamais changer à CDG — taux catastrophiques." },
+      { q: "Wise Card (priorité)", r: "Retrait ATM au taux réel, sans frais cachés. Préparer la carte Wise AVANT le départ. Mettre 1 500–2 000€ dessus." },
+      { q: "ATM thaïlandais", r: "Frais de 220 THB (~6€) par retrait, quelque soit la banque. Faire de gros retraits peu fréquents. Préférer les ATM Kasikorn (K-Bank) ou Bangkok Bank." },
+      { q: "Cash obligatoire", r: "Les îles, les marchés, les tuk-tuks, les songthaews, les ferries locaux : cash only. Toujours avoir 2 000–3 000 THB sur soi." },
+      { q: "Budget journalier indicatif", r: "Budget confort : 60–100€/jour à 2. Budget backpacker : 30–50€/jour. Budget luxe : 120€+/jour." },
+    ],
+  },
+  apps: {
+    titre: "Apps Indispensables",
+    icon: "📱",
+    items: [
+      { q: "Grab", r: "Le Uber thaïlandais. Taxi, moto-taxi, livraison. Fonctionne dans toutes les villes. ESSENTIEL." },
+      { q: "Google Maps offline", r: "Télécharger AVANT d'atterrir. Thaïlande entière. Fonctionne sans connexion pour navigation." },
+      { q: "Wise", r: "Paiements et retraits au taux réel. Meilleure carte voyage." },
+      { q: "Booking / Agoda", r: "Agoda est dominant en Asie du Sud-Est, souvent moins cher que Booking pour la Thaïlande." },
+      { q: "Airalo / SIM locale", r: "eSIM ou SIM thaïlandaise à l'aéroport. AIS ou DTAC : ~10€ pour 15 jours data illimitée." },
+      { q: "12Go Asia", r: "Réservation ferries, trains, buses, minivans inter-villes. Tout en un." },
+      { q: "XE Currency", r: "Taux de change en temps réel pour ne pas se faire arnaquer." },
+    ],
+  },
+  meteo: {
+    titre: "Météo & Saison",
+    icon: "🌦️",
+    items: [
+      { q: "Juillet–Août : saison des pluies", r: "Basse saison côté Andaman (Kao Lak). Quelques avantages : moins de monde, prix réduits, végétation luxuriante. Les pluies durent rarement toute la journée." },
+      { q: "Côté Golfe (Phangan, Tao)", r: "Août est plus clément sur la côte est. Bon temps globalement, averses ponctuelles." },
+      { q: "Nord (Chiang Mai)", r: "Saison verte, brumes matinales, températures plus douces. Les treks sont magnifiques sous la pluie." },
+      { q: "Ce qu'il faut emporter", r: "Vêtements légers, 1 imperméable fin, chaussures fermées pour trekking, tongs, maillots ×3 minimum." },
+    ],
+  },
+};
+
+const BUDGET = [
+  { poste: "Vols internationaux", icon: "✈️", montant: "600–900€", detail: "Déjà réservé Qatar Airways CDG-BKK", coul: G.copper },
+  { poste: "Train de nuit × 2", icon: "🚆", montant: "30–50€", detail: "BKK↔Chiang Mai wagon-lit 2e classe", coul: G.teal },
+  { poste: "Vols intérieurs", icon: "🛩️", montant: "30–60€", detail: "Don Mueang → Phuket (AirAsia / Thai Lion)", coul: G.gold },
+  { poste: "Ferries inter-îles", icon: "⛴️", montant: "40–60€", detail: "Khao Sok → Phangan → Koh Tao → retour continent", coul: G.sage },
+  { poste: "Hébergements", icon: "🛖", montant: "800–1400€", detail: "21 nuits à 2 · 40–70€/nuit moyenne", coul: G.plum },
+  { poste: "Food & restaurants", icon: "🍜", montant: "400–600€", detail: "Street food + restos · ~20–30€/jour à 2", coul: G.copper },
+  { poste: "Activités", icon: "🐘", montant: "300–500€", detail: "Éléphants, PADI, day trips, kayak, yoga", coul: G.teal },
+  { poste: "Shopping", icon: "🛍️", montant: "200–500€", detail: "Marchés, tailleurs, souvenirs · selon envie", coul: G.gold },
+  { poste: "Transports locaux", icon: "🛺", montant: "80–150€", detail: "Tuk-tuk, songthaew, Grab, scooters", coul: G.sage },
+  { poste: "Imprévus / confort", icon: "🧳", montant: "150–300€", detail: "Toujours avoir un matelas de sécurité", coul: G.dim },
+];
+
+/* ─── COMPONENTS ─────────────────────────────────────────────── */
+
+const Tag = ({ children, color }) => (
+  <span style={{
+    background: `${color}25`, color, border: `1px solid ${color}55`,
+    borderRadius: 20, padding: "2px 10px", fontSize: 11, fontWeight: 600, letterSpacing: 0.3,
+    display: "inline-block",
+  }}>{children}</span>
+);
+
+const Pill = ({ label, val, color = G.gold }) => (
+  <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "10px 14px", background: G.card, borderRadius: 10, border: `1px solid ${G.border}` }}>
+    <span style={{ fontSize: 14 }}>{label}</span>
+    <span style={{ color, fontSize: 12, fontWeight: 600, flex: 1 }}>{val}</span>
+  </div>
+);
+
+const SectionTitle = ({ children }) => (
+  <div style={{ color: G.muted, fontSize: 10, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", marginBottom: 12, marginTop: 4 }}>
+    {children}
+  </div>
+);
+
+const Divider = () => <div style={{ height: 1, background: G.border, margin: "16px 0" }} />;
+
+/* ─── ROUTE OVERVIEW ─────────────────────────────────────────── */
+const RouteView = () => (
+  <div style={{ padding: "0 16px 100px" }} className="fade-up">
+    {/* Hero stats */}
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 24 }}>
+      {[
+        { val: "21", label: "nuits", icon: "🌙" },
+        { val: "7", label: "étapes", icon: "📍" },
+        { val: "2", label: "trains nuit", icon: "🚆" },
+      ].map((s, i) => (
+        <div key={i} style={{ background: G.card, border: `1px solid ${G.border}`, borderRadius: 14, padding: "16px 10px", textAlign: "center" }}>
+          <div style={{ fontSize: 22 }}>{s.icon}</div>
+          <div style={{ color: G.gold, fontSize: 26, fontWeight: 700, fontFamily: "'Playfair Display', serif", lineHeight: 1.1 }}>{s.val}</div>
+          <div style={{ color: G.muted, fontSize: 11, marginTop: 2 }}>{s.label}</div>
+        </div>
+      ))}
+    </div>
+
+    {/* Flight info */}
+    <div style={{ background: `linear-gradient(135deg, ${G.copper}22, ${G.gold}11)`, border: `1px solid ${G.copper}44`, borderRadius: 16, padding: 16, marginBottom: 16 }}>
+      <div style={{ color: G.copper, fontSize: 10, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>✈️ Qatar Airways · Vols confirmés</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <div>
+          <div style={{ color: G.text, fontSize: 18, fontWeight: 700, fontFamily: "'Playfair Display', serif" }}>CDG → BKK</div>
+          <div style={{ color: G.muted, fontSize: 11, marginTop: 2 }}>29 jul 16:25 → 30 jul 12:55</div>
+          <div style={{ color: G.dim, fontSize: 10 }}>Via Doha · 6h20 + 2h15 transit + 6h55</div>
+        </div>
+        <div style={{ background: G.copper, color: "white", borderRadius: 8, padding: "4px 12px", fontSize: 11, fontWeight: 700 }}>ALLER</div>
+      </div>
+      <Divider />
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div>
+          <div style={{ color: G.text, fontSize: 18, fontWeight: 700, fontFamily: "'Playfair Display', serif" }}>BKK → CDG</div>
+          <div style={{ color: G.muted, fontSize: 11, marginTop: 2 }}>19 août 02:30 → 19 août 15:20</div>
+          <div style={{ color: G.dim, fontSize: 10 }}>Via Doha · 6h35 + 4h25 transit + 6h50</div>
+        </div>
+        <div style={{ background: G.copper, color: "white", borderRadius: 8, padding: "4px 12px", fontSize: 11, fontWeight: 700 }}>RETOUR</div>
+      </div>
+    </div>
+
+    {/* Night train highlight */}
+    <div style={{ background: `${G.teal}18`, border: `1px solid ${G.teal}44`, borderRadius: 16, padding: 16, marginBottom: 24 }}>
+      <div style={{ color: G.teal, fontSize: 10, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", marginBottom: 12 }}>🚆 Trains de nuit SRT — L'expérience iconique</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {[
+          { trajet: "Bangkok → Chiang Mai", depart: "30 juil · ~18h00", arrivee: "31 juil · ~07h30" },
+          { trajet: "Chiang Mai → Bangkok", depart: "3 août · ~18h00", arrivee: "4 août · ~07h30" },
+        ].map((t, i) => (
+          <div key={i} style={{ background: G.surface, borderRadius: 10, padding: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div style={{ color: G.text, fontSize: 13, fontWeight: 600 }}>{t.trajet}</div>
+              <div style={{ color: G.muted, fontSize: 11, marginTop: 2 }}>Départ {t.depart}</div>
+              <div style={{ color: G.teal, fontSize: 11 }}>Arrivée {t.arrivee}</div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ color: G.gold, fontSize: 13, fontWeight: 700 }}>~20€</div>
+              <div style={{ color: G.dim, fontSize: 10 }}>wagon-lit 2e cl.</div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: 12, color: G.muted, fontSize: 11, lineHeight: 1.7 }}>
+        💡 Réserver sur <span style={{ color: G.gold }}>thairailwayticket.com</span> · Train n°9 ou n°13 · Wagon-lit 2e classe = couchette + rideau + clim + linge propre
+      </div>
+    </div>
+
+    {/* Timeline */}
+    <SectionTitle>Chronologie complète</SectionTitle>
+    <div style={{ position: "relative", paddingLeft: 20 }}>
+      <div style={{ position: "absolute", left: 7, top: 0, bottom: 0, width: 1, background: `${G.border}` }} />
+      {ROUTE.map((r, i) => (
+        <div key={i} style={{ display: "flex", gap: 14, marginBottom: 14, position: "relative" }}>
+          <div style={{
+            position: "absolute", left: -20, top: 4,
+            width: 14, height: 14, borderRadius: "50%",
+            background: r.type === "transport" ? "transparent" : r.color,
+            border: r.type === "transport" ? "none" : `2px solid ${r.color}`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 8, flexShrink: 0,
+          }}>
+            {r.type === "transport" && <span style={{ fontSize: 12 }}>{r.code}</span>}
+          </div>
+          <div style={{ paddingLeft: 4 }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              {r.type !== "transport" && <span style={{ color: r.color, fontSize: 13, fontWeight: 700 }}>{r.label}</span>}
+              {r.type === "transit" && <Tag color={G.dim}>Escale</Tag>}
+              {r.type === "transport" && <span style={{ color: G.muted, fontSize: 12 }}>{r.label}</span>}
+            </div>
+            <div style={{ color: G.muted, fontSize: 11 }}>{r.date}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+/* ─── DESTINATION DETAIL ─────────────────────────────────────── */
+const DestDetail = ({ dest }) => {
+  const [subTab, setSubTab] = useState("quartiers");
+  const tabs = [
+    { key: "quartiers", label: "📍 Quartiers" },
+    { key: "food", label: "🍜 Food" },
+    { key: "activites", label: "🎯 Activités" },
+    { key: "shopping", label: "🛍️ Shopping" },
+    { key: "heberg", label: "🏨 Séjour" },
+    { key: "transport", label: "🚌 Départ" },
+  ].filter(t => t.key !== "shopping" || dest.shopping?.length > 0);
+
+  return (
+    <div className="fade-up">
+      {/* Destination header */}
+      <div style={{
+        background: `linear-gradient(135deg, ${dest.color}28 0%, ${dest.color}08 100%)`,
+        border: `1px solid ${dest.color}33`, borderRadius: 20, padding: 20, marginBottom: 16,
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+          <div>
+            <span style={{ fontSize: 32 }}>{dest.emoji}</span>
+            <div style={{ color: G.text, fontSize: 26, fontWeight: 700, fontFamily: "'Playfair Display', serif", lineHeight: 1.1, marginTop: 4 }}>{dest.name}</div>
+            <div style={{ color: dest.color, fontSize: 13, fontWeight: 500, marginTop: 2 }}>{dest.periode}</div>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ background: dest.color, color: "white", borderRadius: 12, padding: "6px 14px", fontSize: 14, fontWeight: 700, marginBottom: 6 }}>{dest.nights}</div>
+            <div style={{ color: G.muted, fontSize: 11 }}>{dest.dates}</div>
+          </div>
+        </div>
+        <p style={{ color: G.muted, fontSize: 12, lineHeight: 1.8 }}>{dest.intro}</p>
+        <div style={{ marginTop: 10, color: G.muted, fontSize: 11 }}>{dest.meteo}</div>
+      </div>
+
+      {dest.urgence && (
+        <div style={{
+          background: `${dest.urgence.icon === "⚠️" ? G.red : dest.color}12`,
+          border: `1px solid ${dest.urgence.icon === "⚠️" ? G.red : dest.color}44`,
+          borderRadius: 14, padding: "12px 16px", marginBottom: 16,
+          display: "flex", gap: 10, alignItems: "flex-start",
+        }}>
+          <span style={{ fontSize: 18 }}>{dest.urgence.icon}</span>
+          <span style={{ color: G.text, fontSize: 12, lineHeight: 1.7 }}>{dest.urgence.text}</span>
+        </div>
+      )}
+
+      {/* Sub-tabs */}
+      <div style={{ overflowX: "auto", marginBottom: 16, paddingBottom: 4 }}>
+        <div style={{ display: "flex", gap: 6, minWidth: "max-content" }}>
+          {tabs.map(t => (
+            <button key={t.key} onClick={() => setSubTab(t.key)} style={{
+              background: subTab === t.key ? dest.color : G.card,
+              color: subTab === t.key ? "white" : G.muted,
+              border: `1px solid ${subTab === t.key ? dest.color : G.border}`,
+              borderRadius: 20, padding: "7px 14px", fontSize: 11, fontWeight: 600,
+              cursor: "pointer", whiteSpace: "nowrap", transition: "all 0.2s",
+            }}>{t.label}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* Quartiers */}
+      {subTab === "quartiers" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {dest.quartiers.map((q, i) => (
+            <div key={i} className="card-hover" style={{ background: G.card, border: `1px solid ${G.border}`, borderRadius: 14, padding: 16, borderLeft: `3px solid ${dest.color}` }}>
+              <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 6 }}>
+                <span style={{ fontSize: 20 }}>{q.icon}</span>
+                <div>
+                  <div style={{ color: G.text, fontSize: 14, fontWeight: 600 }}>{q.nom}</div>
+                  <div style={{ color: dest.color, fontSize: 10, fontWeight: 500 }}>{q.vibe}</div>
+                </div>
+              </div>
+              <div style={{ color: G.muted, fontSize: 12, lineHeight: 1.7, borderTop: `1px solid ${G.border}`, paddingTop: 10 }}>
+                💡 {q.tip}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Food */}
+      {subTab === "food" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {dest.food.map((f, i) => (
+            <div key={i} className="card-hover" style={{ background: G.card, border: `1px solid ${f.must ? `${dest.color}55` : G.border}`, borderRadius: 14, padding: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+                <div style={{ color: G.text, fontSize: 14, fontWeight: 600 }}>🍽️ {f.nom}</div>
+                {f.must && <Tag color={dest.color}>Must try</Tag>}
+              </div>
+              <div style={{ color: G.muted, fontSize: 12, lineHeight: 1.7 }}>{f.detail}</div>
+            </div>
+          ))}
+          {dest.food.length === 0 && <div style={{ color: G.muted, fontSize: 13, textAlign: "center", padding: 24 }}>Options intégrées à l'hébergement pour cette étape.</div>}
+        </div>
+      )}
+
+      {/* Activités */}
+      {subTab === "activites" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {dest.activites.map((a, i) => (
+            <div key={i} className="card-hover" style={{ background: G.card, border: `1px solid ${G.border}`, borderRadius: 14, padding: 16, display: "flex", gap: 14 }}>
+              <div style={{ fontSize: 28, lineHeight: 1, flexShrink: 0 }}>{a.icon}</div>
+              <div>
+                <div style={{ color: G.text, fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{a.nom}</div>
+                <div style={{ color: G.muted, fontSize: 12, lineHeight: 1.7 }}>{a.detail}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Shopping */}
+      {subTab === "shopping" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {dest.shopping?.map((s, i) => (
+            <div key={i} className="card-hover" style={{ background: G.card, border: `1px solid ${G.border}`, borderRadius: 14, padding: 16, display: "flex", gap: 14 }}>
+              <div style={{ fontSize: 24, lineHeight: 1, flexShrink: 0 }}>{s.icon}</div>
+              <div>
+                <div style={{ color: G.text, fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{s.nom}</div>
+                <div style={{ color: G.muted, fontSize: 12, lineHeight: 1.7 }}>{s.detail}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Hébergement */}
+      {subTab === "heberg" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ background: `${G.gold}11`, border: `1px solid ${G.gold}33`, borderRadius: 12, padding: 12, marginBottom: 4 }}>
+            <div style={{ color: G.gold, fontSize: 11, fontWeight: 700, marginBottom: 4 }}>💡 Recommandation générale</div>
+            <div style={{ color: G.muted, fontSize: 12, lineHeight: 1.6 }}>Réserver les hébergements insolites (floating bungalows Khao Sok, villas Phangan) 2–3 mois à l'avance. Pour les îles, Agoda est souvent moins cher que Booking.</div>
+          </div>
+          {dest.heberg?.map((h, i) => (
+            <div key={i} className="card-hover" style={{ background: G.card, border: `1px solid ${G.border}`, borderRadius: 14, padding: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                <div style={{ color: G.text, fontSize: 13, fontWeight: 600 }}>🏨 {h.type}</div>
+                <div style={{ color: G.gold, fontSize: 13, fontWeight: 700 }}>{h.budget}</div>
+              </div>
+              <div style={{ color: G.muted, fontSize: 12, lineHeight: 1.6 }}>{h.tip}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Transport */}
+      {subTab === "transport" && dest.transport_out && (
+        <div style={{ background: G.card, border: `1px solid ${G.border}`, borderRadius: 16, padding: 20 }}>
+          <div style={{ color: G.text, fontSize: 15, fontWeight: 700, fontFamily: "'Playfair Display', serif", marginBottom: 16 }}>Prochaine étape →</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {[
+              { l: "De", v: dest.transport_out.de },
+              { l: "Vers", v: dest.transport_out.vers },
+              { l: "Moyen", v: dest.transport_out.moyen },
+              { l: "Durée", v: dest.transport_out.duree },
+              { l: "Prix", v: dest.transport_out.prix },
+            ].map((r, i) => (
+              <div key={i} style={{ display: "flex", gap: 12 }}>
+                <div style={{ color: dest.color, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, minWidth: 40, paddingTop: 2 }}>{r.l}</div>
+                <div style={{ color: G.text, fontSize: 13, lineHeight: 1.5, flex: 1 }}>{r.v}</div>
+              </div>
+            ))}
+            <div style={{ background: `${dest.color}12`, border: `1px solid ${dest.color}33`, borderRadius: 10, padding: 12, marginTop: 8 }}>
+              <div style={{ color: dest.color, fontSize: 10, fontWeight: 700, marginBottom: 6 }}>💡 Conseil pratique</div>
+              <div style={{ color: G.muted, fontSize: 12, lineHeight: 1.7 }}>{dest.transport_out.conseil}</div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ─── DESTINATIONS VIEW ──────────────────────────────────────── */
+const DestinationsView = () => {
+  const [active, setActive] = useState(0);
+  return (
+    <div style={{ padding: "0 0 100px" }}>
+      {/* Horizontal dest picker */}
+      <div style={{ overflowX: "auto", padding: "0 16px 16px" }}>
+        <div style={{ display: "flex", gap: 10, minWidth: "max-content" }}>
+          {DESTINATIONS.map((d, i) => (
+            <button key={d.id} onClick={() => setActive(i)} style={{
+              background: i === active ? d.color : G.card,
+              border: `1px solid ${i === active ? d.color : G.border}`,
+              borderRadius: 16, padding: "12px 14px", cursor: "pointer",
+              textAlign: "left", minWidth: 90, transition: "all 0.25s",
+              boxShadow: i === active ? `0 4px 20px ${d.color}44` : "none",
+            }}>
+              <div style={{ fontSize: 20, marginBottom: 4 }}>{d.emoji}</div>
+              <div style={{ color: i === active ? "white" : G.text, fontSize: 12, fontWeight: 700, lineHeight: 1.2 }}>{d.name}</div>
+              <div style={{ color: i === active ? "rgba(255,255,255,0.7)" : G.muted, fontSize: 10, marginTop: 2 }}>{d.nights}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+      <div style={{ padding: "0 16px" }}>
+        <DestDetail dest={DESTINATIONS[active]} />
+      </div>
+    </div>
+  );
+};
+
+/* ─── PRATIQUE VIEW ──────────────────────────────────────────── */
+const PratiqueView = () => {
+  const [open, setOpen] = useState(null);
+  const sections = Object.values(PRATIQUE);
+  return (
+    <div style={{ padding: "0 16px 100px" }} className="fade-up">
+      {sections.map((s, si) => (
+        <div key={si} style={{ marginBottom: 20 }}>
+          <SectionTitle>{s.icon} {s.titre}</SectionTitle>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {s.items.map((item, ii) => {
+              const key = `${si}-${ii}`;
+              const isOpen = open === key;
+              return (
+                <div key={ii} style={{
+                  background: G.card, border: `1px solid ${isOpen ? G.gold + "55" : G.border}`,
+                  borderRadius: 12, overflow: "hidden", transition: "border-color 0.2s",
+                }}>
+                  <button onClick={() => setOpen(isOpen ? null : key)} style={{
+                    width: "100%", padding: "13px 16px", background: "none",
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                    cursor: "pointer",
+                  }}>
+                    <span style={{ color: G.text, fontSize: 13, fontWeight: 500, textAlign: "left" }}>{item.q}</span>
+                    <span style={{ color: G.gold, fontSize: 16, transform: isOpen ? "rotate(45deg)" : "none", transition: "transform 0.2s", flexShrink: 0 }}>+</span>
+                  </button>
+                  {isOpen && (
+                    <div style={{ padding: "0 16px 14px", color: G.muted, fontSize: 12, lineHeight: 1.8, borderTop: `1px solid ${G.border}` }}>
+                      <div style={{ paddingTop: 12 }}>{item.r}</div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+/* ─── BUDGET VIEW ────────────────────────────────────────────── */
+const BudgetView = () => {
+  const ranges = BUDGET.map(b => {
+    const [low, high] = b.montant.replace(/[€]/g, "").split("–").map(Number);
+    return { low: low || 0, high: high || low || 0 };
+  });
+  const totalLow = ranges.reduce((s, r) => s + r.low, 0);
+  const totalHigh = ranges.reduce((s, r) => s + r.high, 0);
+  const maxHigh = Math.max(...ranges.map(r => r.high));
+
+  return (
+    <div style={{ padding: "0 16px 100px" }} className="fade-up">
+      {/* Total */}
+      <div style={{
+        background: `linear-gradient(135deg, ${G.gold}22, ${G.copper}11)`,
+        border: `1px solid ${G.gold}44`, borderRadius: 20, padding: 20, marginBottom: 24, textAlign: "center",
+      }}>
+        <div style={{ color: G.muted, fontSize: 11, letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>Budget total estimé · 2 personnes</div>
+        <div style={{ color: G.gold, fontFamily: "'Playfair Display', serif", fontSize: 36, fontWeight: 700 }}>
+          {totalLow.toLocaleString()}€ – {totalHigh.toLocaleString()}€
+        </div>
+        <div style={{ color: G.muted, fontSize: 12, marginTop: 8 }}>
+          Soit ~{Math.round(totalLow / 2 / 21)}€ – ~{Math.round(totalHigh / 2 / 21)}€ / personne / jour
+        </div>
+      </div>
+
+      <SectionTitle>Répartition par poste</SectionTitle>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {BUDGET.map((b, i) => (
+          <div key={i} style={{ background: G.card, border: `1px solid ${G.border}`, borderRadius: 14, padding: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <span style={{ fontSize: 20 }}>{b.icon}</span>
+                <div>
+                  <div style={{ color: G.text, fontSize: 13, fontWeight: 600 }}>{b.poste}</div>
+                  <div style={{ color: G.muted, fontSize: 11 }}>{b.detail}</div>
+                </div>
+              </div>
+              <div style={{ color: b.coul, fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", marginLeft: 8 }}>{b.montant}</div>
+            </div>
+            {/* Bar */}
+            <div style={{ height: 4, background: G.surface, borderRadius: 2, overflow: "hidden" }}>
+              <div style={{
+                height: "100%", borderRadius: 2,
+                background: `linear-gradient(to right, ${b.coul}88, ${b.coul})`,
+                width: `${(ranges[i].high / maxHigh) * 100}%`,
+                transition: "width 0.5s ease",
+              }} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ background: G.card, border: `1px solid ${G.border}`, borderRadius: 14, padding: 16, marginTop: 20 }}>
+        <div style={{ color: G.gold, fontSize: 12, fontWeight: 700, marginBottom: 10 }}>💡 Astuces économies</div>
+        {[
+          "Retrait ATM : maximum 20 000 THB (~500€) d'un coup — frais fixes de 220 THB/retrait.",
+          "Manger midi en restaurant local : 100–200 THB (3–5€). Le soir en « touriste » : 400–600 THB.",
+          "Plongée PADI à Koh Tao : un des endroits les moins chers du monde pour certifier.",
+          "Scooter de location : ~200 THB/jour (5€). La meilleure façon de visiter les îles.",
+          "Ferries : acheter les billets la veille à l'hébergement = même prix, pas de surprise.",
+        ].map((tip, i) => (
+          <div key={i} style={{ color: G.muted, fontSize: 12, lineHeight: 1.7, display: "flex", gap: 8, marginBottom: 6 }}>
+            <span style={{ color: G.gold }}>→</span> {tip}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+/* ─── APP ────────────────────────────────────────────────────── */
+export default function ThailandGuide() {
+  const [page, setPage] = useState("route");
+
+  const navItems = [
+    { key: "route", icon: "🗺️", label: "Route" },
+    { key: "etapes", icon: "📍", label: "Étapes" },
+    { key: "pratique", icon: "🎒", label: "Pratique" },
+    { key: "budget", icon: "💰", label: "Budget" },
+  ];
+
+  return (
+    <>
+      <style>{css}</style>
+      <div style={{ fontFamily: "'DM Sans', sans-serif", background: G.bg, minHeight: "100vh", maxWidth: 480, margin: "0 auto", color: G.text }}>
+
+        {/* Header */}
+        <div style={{
+          background: `linear-gradient(160deg, #0C0F1A 0%, #141824 40%, ${G.gold}18 100%)`,
+          padding: "28px 20px 20px", position: "sticky", top: 0, zIndex: 100,
+          borderBottom: `1px solid ${G.border}`,
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+            <div>
+              <div style={{ color: G.gold, fontSize: 10, fontWeight: 700, letterSpacing: 3, textTransform: "uppercase", marginBottom: 4 }}>Guide de voyage</div>
+              <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, fontWeight: 700, lineHeight: 1, letterSpacing: -0.5 }}>
+                Thaï<span style={{ color: G.gold }}>lande</span>
+              </div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ color: G.muted, fontSize: 11 }}>29 juil – 19 août</div>
+              <div style={{ color: G.copper, fontSize: 11, fontWeight: 600 }}>2026 · 21 nuits</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Page content */}
+        <div style={{ paddingTop: 20, minHeight: "calc(100vh - 60px)" }}>
+          {page === "route" && <RouteView />}
+          {page === "etapes" && <DestinationsView />}
+          {page === "pratique" && <PratiqueView />}
+          {page === "budget" && <BudgetView />}
+        </div>
+
+        {/* Bottom nav */}
+        <div style={{
+          position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)",
+          width: "100%", maxWidth: 480,
+          background: `${G.surface}F0`, backdropFilter: "blur(20px)",
+          borderTop: `1px solid ${G.border}`, padding: "10px 0 16px",
+          display: "flex", zIndex: 200,
+        }}>
+          {navItems.map(n => (
+            <button key={n.key} onClick={() => setPage(n.key)} style={{
+              flex: 1, background: "none", border: "none", cursor: "pointer",
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+              transition: "all 0.2s",
+            }}>
+              <span style={{ fontSize: 20, filter: page === n.key ? "none" : "grayscale(60%)", transition: "filter 0.2s" }}>{n.icon}</span>
+              <span style={{
+                fontSize: 10, fontWeight: 600,
+                color: page === n.key ? G.gold : G.dim,
+                transition: "color 0.2s",
+              }}>{n.label}</span>
+              {page === n.key && <div style={{ width: 4, height: 4, borderRadius: "50%", background: G.gold }} />}
+            </button>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
